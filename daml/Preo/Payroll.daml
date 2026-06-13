@@ -1,0 +1,54 @@
+module Preo.Payroll where
+
+template EmployerPayrollNotice
+  with
+    employer : Party
+    employee : Party
+    grossAmount : Decimal
+    asset : Text
+    payrollRef : Text
+    createdAt : Time
+  where
+    signatory employer
+    observer employee
+
+    ensure grossAmount > 0.0 && asset /= "" && payrollRef /= ""
+
+    nonconsuming choice ConfirmReceived : ContractId PayrollCredit
+      with
+        flowTransactionId : Optional Text
+        evmTxHash : Optional Text
+        confirmedAt : Time
+      controller employee
+      do
+        create PayrollCredit with
+          user = employee
+          amount = grossAmount
+          asset = asset
+          sourceRef = payrollRef
+          flowTransactionId = flowTransactionId
+          evmTxHash = evmTxHash
+          createdAt = confirmedAt
+          allocated = False
+
+template PayrollCredit
+  with
+    user : Party
+    amount : Decimal
+    asset : Text
+    sourceRef : Text
+    flowTransactionId : Optional Text
+    evmTxHash : Optional Text
+    createdAt : Time
+    allocated : Bool
+  where
+    signatory user
+
+    ensure amount > 0.0 && asset /= "" && sourceRef /= ""
+
+    nonconsuming choice MarkAllocated : ContractId PayrollCredit
+      controller user
+      do
+        assertMsg "payroll credit is already allocated" (not allocated)
+        archive self
+        create this with allocated = True

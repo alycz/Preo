@@ -1,0 +1,8 @@
+{
+  "network": "canton-devnet",
+  "packageId": "",
+  "dar": ".daml/dist/preo-0.0.1.dar",
+  "deployedAt": "",
+  "notes": "Populate after uploading the DAR to Canton DevNet or the sponsor-approved test environment."
+}
+

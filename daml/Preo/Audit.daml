@@ -1,0 +1,22 @@
+module Preo.Audit where
+
+optionalPartyToList : Optional Party -> [Party]
+optionalPartyToList optionalParty =
+  case optionalParty of
+    Some party -> [party]
+    None -> []
+
+template OperatorAuditEvent
+  with
+    operator : Party
+    user : Optional Party
+    userAlias : Text
+    eventType : Text
+    status : Text
+    referenceHash : Text
+    createdAt : Time
+  where
+    signatory operator
+    observer optionalPartyToList user
+
+    ensure userAlias /= "" && eventType /= "" && status /= "" && referenceHash /= ""

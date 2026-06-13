@@ -1,0 +1,25 @@
+module Preo.User where
+
+template UserProfile
+  with
+    user : Party
+    displayName : Text
+    createdAt : Time
+    active : Bool
+  where
+    signatory user
+
+    nonconsuming choice UpdateDisplayName : ContractId UserProfile
+      with
+        newDisplayName : Text
+      controller user
+      do
+        assertMsg "display name cannot be empty" (newDisplayName /= "")
+        archive self
+        create this with displayName = newDisplayName
+
+    nonconsuming choice DeactivateProfile : ContractId UserProfile
+      controller user
+      do
+        archive self
+        create this with active = False

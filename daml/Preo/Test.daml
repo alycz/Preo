@@ -1,0 +1,193 @@
+module Preo.Test where
+
+import DA.List (head)
+import Daml.Script
+import Preo.Allocation
+import Preo.Audit
+import Preo.Payment
+import Preo.Payroll
+import Preo.Policy
+import qualified Preo.Portfolio as Portfolio
+import Preo.Types
+import Preo.User
+
+rentRule : Party -> CategoryRule
+rentRule recipientParty =
+  CategoryRule with
+    categoryId = "rent"
+    label = "Rent"
+    percentageBps = 3500.0
+    categoryType = ExternalPayment
+    recipient = Some recipientParty
+    externalAddress = None
+    portfolioTarget = None
+    requiresApproval = False
+
+emergencyRule : CategoryRule
+emergencyRule =
+  CategoryRule with
+    categoryId = "emergency"
+    label = "Emergency Fund"
+    percentageBps = 2000.0
+    categoryType = InternalReserve
+    recipient = None
+    externalAddress = None
+    portfolioTarget = None
+    requiresApproval = False
+
+portfolioRule : CategoryRule
+portfolioRule =
+  CategoryRule with
+    categoryId = "portfolio"
+    label = "Portfolio"
+    percentageBps = 3000.0
+    categoryType = PortfolioAllocation
+    recipient = None
+    externalAddress = None
+    portfolioTarget = Some GlobalEquityBasket
+    requiresApproval = True
+
+spendingRule : CategoryRule
+spendingRule =
+  CategoryRule with
+    categoryId = "spending"
+    label = "Spending"
+    percentageBps = 1500.0
+    categoryType = ManualHold
+    recipient = None
+    externalAddress = None
+    portfolioTarget = None
+    requiresApproval = False
+
+runPrivacyDemo : Script ()
+runPrivacyDemo = script do
+  user <- allocateParty "preo-user"
+  employer <- allocateParty "preo-employer"
+  recipient <- allocateParty "preo-recipient"
+  operator <- allocateParty "preo-operator"
+  otherUser <- allocateParty "preo-other-user"
+  now <- getTime
+
+  submit user do
+    createCmd UserProfile with
+      user = user
+      displayName = "Demo Employee"
+      createdAt = now
+      active = True
+
+  policyCid <- submit user do
+    createCmd PayrollPolicy with
+      user = user
+      policyName = "June Payroll Policy"
+      categories = [rentRule recipient, emergencyRule, portfolioRule, spendingRule]
+      approvalRules = []
+      version = 1
+      active = True
+      createdAt = now
+      updatedAt = now
+
+  submit user do
+    exerciseCmd policyCid ValidatePolicy
+
+  noticeCid <- submit employer do
+    createCmd EmployerPayrollNotice with
+      employer = employer
+      employee = user
+      grossAmount = 2000.0
+      asset = "USDC"
+      payrollRef = "payroll-june-001"
+      createdAt = now
+
+  creditCid <- submit user do
+    createCmd PayrollCredit with
+      user = user
+      amount = 2000.0
+      asset = "USDC"
+      sourceRef = "flow-confirmation-june-001"
+      flowTransactionId = Some "flow-tx-demo-001"
+      evmTxHash = Some "0xpayroll"
+      createdAt = now
+      allocated = False
+
+  allocationCid <- submit user do
+    createCmd AllocationRun with
+      user = user
+      runId = "run-june-001"
+      policyVersion = 0
+      payrollAmount = 0.0
+      asset = ""
+      lines = []
+      status = AllocationPending
+      createdAt = now
+
+  executedRunCid <- submit user do
+    exerciseCmd allocationCid ExecuteAllocation with
+      policyCid = policyCid
+      creditCid = creditCid
+      now = now
+
+  pendingActions <- query @PendingAction user
+  assertMsg "user should have one pending approval" (length pendingActions == 1)
+  let pendingCid = fst (head pendingActions)
+
+  approvedCid <- submit user do
+    exerciseCmd pendingCid Approve
+
+  submit user do
+    exerciseCmd approvedCid ExecuteApprovedAction with
+      runId = "run-june-001"
+      evmTxHash = Some "0xportfolioapproval"
+      executedAt = now
+
+  submit operator do
+    createCmd OperatorAuditEvent with
+      operator = operator
+      user = None
+      userAlias = "employee-demo"
+      eventType = "allocation.completed"
+      status = "completed"
+      referenceHash = "hash-run-june-001"
+      createdAt = now
+
+  userRuns <- query @AllocationRun user
+  userBalances <- query @CategoryBalance user
+  userReceipts <- query @PaymentReceipt user
+  userPortfolio <- query @Portfolio.PortfolioAllocation user
+  assertMsg "user should see executed allocation run" (length userRuns == 1)
+  assertMsg "user should see four category balance deltas" (length userBalances == 4)
+  assertMsg "user should see rent payment receipt" (length userReceipts == 1)
+  assertMsg "user should see executed portfolio allocation" (length userPortfolio == 1)
+
+  recipientReceipts <- query @PaymentReceipt recipient
+  recipientRuns <- query @AllocationRun recipient
+  recipientBalances <- query @CategoryBalance recipient
+  assertMsg "recipient should see only their payment receipt" (length recipientReceipts == 1)
+  assertMsg "recipient should not see allocation runs" (length recipientRuns == 0)
+  assertMsg "recipient should not see category balances" (length recipientBalances == 0)
+
+  employerNotices <- query @EmployerPayrollNotice employer
+  employerRuns <- query @AllocationRun employer
+  employerBalances <- query @CategoryBalance employer
+  employerReceipts <- query @PaymentReceipt employer
+  assertMsg "employer should see payroll notice" (length employerNotices == 1)
+  assertMsg "employer should not see allocation runs" (length employerRuns == 0)
+  assertMsg "employer should not see category balances" (length employerBalances == 0)
+  assertMsg "employer should not see receipts" (length employerReceipts == 0)
+
+  operatorAudit <- query @OperatorAuditEvent operator
+  operatorRuns <- query @AllocationRun operator
+  operatorBalances <- query @CategoryBalance operator
+  assertMsg "operator should see audit metadata" (length operatorAudit == 1)
+  assertMsg "operator should not see allocation runs" (length operatorRuns == 0)
+  assertMsg "operator should not see category balances" (length operatorBalances == 0)
+
+  otherRuns <- query @AllocationRun otherUser
+  otherBalances <- query @CategoryBalance otherUser
+  otherReceipts <- query @PaymentReceipt otherUser
+  otherAudit <- query @OperatorAuditEvent otherUser
+  assertMsg "other user should not see allocation runs" (length otherRuns == 0)
+  assertMsg "other user should not see category balances" (length otherBalances == 0)
+  assertMsg "other user should not see receipts" (length otherReceipts == 0)
+  assertMsg "other user should not see audit events" (length otherAudit == 0)
+
+  pure ()
