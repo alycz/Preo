@@ -30,7 +30,8 @@
     "demo:direct-vault-deposit": "tsx scripts/demo-direct-vault-deposit.ts",
     "smoke:flow": "pnpm --filter @preo/web smoke:flow",
     "smoke:agent-wallet": "pnpm --filter @preo/web smoke:agent-wallet",
-    "smoke:evm-funding": "pnpm --filter @preo/web smoke:evm-funding"
+    "smoke:evm-funding": "pnpm --filter @preo/web smoke:evm-funding",
+    "start": "pnpm --filter @preo/web start"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

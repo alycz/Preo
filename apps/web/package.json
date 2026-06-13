@@ -14,7 +14,8 @@
     "smoke:agent-wallet": "tsx scripts/smoke-agent-wallet.ts",
     "smoke:full-flow": "tsx scripts/smoke-full-flow.ts",
     "smoke:blink": "tsx scripts/smoke-blink.ts",
-    "smoke:evm-funding": "tsx scripts/smoke-evm-funding.ts"
+    "smoke:evm-funding": "tsx scripts/smoke-evm-funding.ts",
+    "start": "next start"
   },
   "dependencies": {
     "@dynamic-labs/ethereum": "^4.88.5",
