@@ -1,9 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { evmVerifyDepositRequestSchema } from "@preo/shared";
 import type { Hex } from "viem";
-import { canton } from "@/lib/canton";
 import { getReceiptDeposit, makeDemoVerifiedVaultDeposit, type VerifiedVaultDeposit } from "@/lib/evm-funding";
 import { errorResponse, ok, parseJson } from "@/lib/http";
+import { createPayrollCreditFromFundingIntent } from "@/lib/orchestration";
 import { prisma } from "@/lib/prisma";
 import { externalRefHash, getSettlementConfig, preoUserIdHash } from "@/lib/settlement";
 import { getRequiredUser } from "@/lib/users";
@@ -74,21 +74,12 @@ export async function POST(request: Request) {
       });
     }
 
-    const credit = await canton.createPayrollCredit({
-      user: user.cantonPartyId,
-      amount: deposit.amount,
-      asset: "USDC",
-      sourceRef: input.sourceRef ?? deposit.externalRef,
-      evmTxHash: deposit.txHash
-    });
-
     const evmEvent = existing
       ? await prisma.evmEvent.update({
           where: { id: existing.id },
           data: {
             userId: user.id,
-            processedAt: new Date(),
-            cantonCreditContractId: credit.contractId
+            processedAt: new Date()
           }
         })
       : await prisma.evmEvent.create({
@@ -104,8 +95,7 @@ export async function POST(request: Request) {
             amount: deposit.amount,
             externalRef: deposit.externalRef,
             payload: eventPayload(deposit),
-            processedAt: new Date(),
-            cantonCreditContractId: credit.contractId
+            processedAt: new Date()
           }
         });
 
@@ -128,17 +118,23 @@ export async function POST(request: Request) {
       logIndex: deposit.logIndex,
       status: "settled",
       settlementTxHash: deposit.txHash,
-      cantonCreditContractId: credit.contractId,
       metadata: {
         eventName: deposit.eventName,
-        evmEventId: evmEvent.id,
-        cantonLive: credit.live
+        evmEventId: evmEvent.id
       } as Prisma.InputJsonValue
     };
 
     const fundingIntent = intent
       ? await prisma.fundingIntent.update({ where: { id: intent.id }, data: intentData })
       : await prisma.fundingIntent.create({ data: { ...intentData, userId: user.id } });
+    const credit = await createPayrollCreditFromFundingIntent(fundingIntent.id, {
+      sourceRef: input.sourceRef ?? deposit.externalRef,
+      evmTxHash: deposit.txHash
+    });
+    await prisma.evmEvent.update({
+      where: { id: evmEvent.id },
+      data: { cantonCreditContractId: credit.contractId }
+    });
 
     return ok({
       status: "settled",

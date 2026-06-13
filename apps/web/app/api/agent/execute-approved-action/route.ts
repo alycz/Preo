@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequiredUser } from "@/lib/users";
 import { createAgentWalletFromEnv, parseAssetUnits } from "@preo/dynamic-integration";
 import { executeApprovedActionRequestSchema } from "@preo/shared";
+import { recordCantonContract } from "@/lib/orchestration";
 
 export const runtime = "nodejs";
 
@@ -63,6 +64,10 @@ export async function POST(request: Request) {
       runId: input.runId ?? input.actionId.split(":")[0] ?? input.actionId,
       evmTxHash: transaction.txHash
     });
+    const executedAction = await canton.getPendingAction(executed.contractId, user.cantonPartyId);
+    if (executedAction) {
+      await recordCantonContract(executedAction, { userId: user.id, partyId: user.cantonPartyId });
+    }
 
     const finalAction = await prisma.agentAction.update({
       where: { id: action.id },

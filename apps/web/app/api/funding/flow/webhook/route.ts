@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { canton } from "@/lib/canton";
 import { errorResponse, ok } from "@/lib/http";
+import { createPayrollCreditFromFundingIntent } from "@/lib/orchestration";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -49,22 +49,14 @@ export async function POST(request: Request) {
     if (transactionId && settlementState === "completed") {
       const intent = await prisma.fundingIntent.findUnique({ where: { transactionId }, include: { user: true } });
       if (intent && !intent.cantonCreditContractId) {
-        const credit = await canton.createPayrollCredit({
-          user: intent.user.cantonPartyId,
-          amount: intent.amount,
-          asset: "USDC",
-          sourceRef: transactionId,
-          flowTransactionId: transactionId,
-          evmTxHash: settlementTxHash
-        });
         await prisma.fundingIntent.update({
           where: { id: intent.id },
           data: {
             status: "settled",
-            settlementTxHash,
-            cantonCreditContractId: credit.contractId
+            settlementTxHash
           }
         });
+        await createPayrollCreditFromFundingIntent(intent.id, { sourceRef: transactionId, evmTxHash: settlementTxHash });
       }
     }
 
