@@ -61,6 +61,8 @@ function DashboardCore({ identity }: { identity: Identity }) {
   const [amount, setAmount] = useState("2500.00");
   const [toAddress, setToAddress] = useState("");
   const [actionAmount, setActionAmount] = useState("25.00");
+  const [vaultTxHash, setVaultTxHash] = useState("");
+  const [lastBlinkRef, setLastBlinkRef] = useState("");
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -125,6 +127,37 @@ function DashboardCore({ identity }: { identity: Identity }) {
       amount,
       asset: "USDC",
       sourceRef: `direct-demo-${Date.now()}`
+    });
+  }
+
+  async function prepareBlinkDeposit() {
+    const session = (await postJson("/api/funding/blink/session", {
+      dynamicUserId,
+      amount
+    })) as {
+      chainId: number;
+      tokenAddress: string;
+      destinationAddress: string;
+      externalRef?: string;
+    };
+    if (session.externalRef) {
+      setLastBlinkRef(session.externalRef);
+    }
+    await postJson("/api/blink/sign-payment", {
+      amount,
+      chainId: session.chainId,
+      address: session.destinationAddress,
+      token: session.tokenAddress,
+      callbackScheme: null
+    });
+  }
+
+  async function verifyVaultDeposit() {
+    await postJson("/api/funding/evm/verify-deposit", {
+      dynamicUserId,
+      txHash: vaultTxHash,
+      sourceRef: lastBlinkRef || undefined,
+      demoAmount: amount
     });
   }
 
@@ -201,6 +234,19 @@ function DashboardCore({ identity }: { identity: Identity }) {
               Direct testnet deposit
             </button>
           </div>
+          <div className="row">
+            <button onClick={prepareBlinkDeposit} disabled={busy || !isSignedIn}>
+              Prepare Blink deposit
+            </button>
+            <span className="status ok">Blink secondary</span>
+          </div>
+          <label className="stack">
+            <span className="muted">Vault deposit tx hash</span>
+            <input value={vaultTxHash} onChange={(event) => setVaultTxHash(event.target.value)} placeholder="0x..." />
+          </label>
+          <button className="secondary" onClick={verifyVaultDeposit} disabled={busy || !isSignedIn || !vaultTxHash}>
+            Verify vault deposit
+          </button>
         </section>
 
         <section className="panel stack">

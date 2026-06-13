@@ -8,12 +8,17 @@
     "build": "pnpm --filter @preo/web build",
     "typecheck": "pnpm --recursive typecheck",
     "test": "pnpm --recursive test",
+    "contracts:compile": "pnpm --filter @preo/contracts compile",
+    "contracts:test": "pnpm --filter @preo/contracts test",
+    "contracts:deploy": "pnpm --filter @preo/contracts deploy",
     "daml:test": "cd daml && JAVA_HOME=/opt/homebrew/opt/openjdk@17 PATH=\"/opt/homebrew/opt/openjdk@17/bin:$HOME/.daml/bin:$PATH\" daml test",
     "prisma:generate": "pnpm --filter @preo/web prisma:generate",
     "prisma:migrate": "pnpm --filter @preo/web prisma:migrate",
     "smoke:flow": "pnpm --filter @preo/web smoke:flow",
     "smoke:agent-wallet": "pnpm --filter @preo/web smoke:agent-wallet",
-    "smoke:full-flow": "pnpm --filter @preo/web smoke:full-flow"
+    "smoke:full-flow": "pnpm --filter @preo/web smoke:full-flow",
+    "smoke:blink": "pnpm --filter @preo/web smoke:blink",
+    "smoke:evm-funding": "pnpm --filter @preo/web smoke:evm-funding"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

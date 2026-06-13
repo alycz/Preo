@@ -12,11 +12,14 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "smoke:flow": "tsx scripts/smoke-flow-checkout.ts",
     "smoke:agent-wallet": "tsx scripts/smoke-agent-wallet.ts",
-    "smoke:full-flow": "tsx scripts/smoke-full-flow.ts"
+    "smoke:full-flow": "tsx scripts/smoke-full-flow.ts",
+    "smoke:blink": "tsx scripts/smoke-blink.ts",
+    "smoke:evm-funding": "tsx scripts/smoke-evm-funding.ts"
   },
   "dependencies": {
     "@dynamic-labs/ethereum": "^4.88.5",
     "@dynamic-labs/sdk-react-core": "^4.88.5",
+    "@swype-org/deposit": "^0.3.19",
     "@prisma/client": "6.19.3",
     "@preo/canton-client": "workspace:*",
     "@preo/dynamic-integration": "workspace:*",
@@ -24,6 +27,7 @@
     "next": "^16.0.8",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
+    "viem": "^2.52.2",
     "zod": "^4.2.0"
   },
   "devDependencies": {

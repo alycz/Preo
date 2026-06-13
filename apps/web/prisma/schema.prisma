@@ -19,6 +19,7 @@ model User {
 
   fundingIntents FundingIntent[]
   agentActions   AgentAction[]
+  evmEvents      EvmEvent[]
 }
 
 model FundingIntent {
@@ -29,6 +30,11 @@ model FundingIntent {
   transactionId          String?  @unique
   amount                 String
   token                  String
+  chainId                Int?
+  tokenAddress           String?
+  destinationAddress     String?
+  externalRef            String?
+  logIndex               Int?
   status                 String
   settlementTxHash       String?
   cantonCreditContractId String?
@@ -37,6 +43,28 @@ model FundingIntent {
   updatedAt              DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
+}
+
+model EvmEvent {
+  id                     String    @id @default(cuid())
+  userId                 String?
+  chainId                Int
+  txHash                 String
+  logIndex               Int
+  eventName              String
+  vaultAddress           String
+  tokenAddress           String
+  preoUserIdHash         String
+  amount                 String
+  externalRef            String
+  payload                Json
+  processedAt            DateTime?
+  cantonCreditContractId String?
+  createdAt              DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@unique([chainId, txHash, logIndex])
 }
 
 model WebhookEvent {

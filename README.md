@@ -3,6 +3,7 @@
 Preo is a privacy-first agentic payroll neobank prototype. This repository slice contains the Canton/Daml private ledger MVP for payroll policies, private category accounting, approval actions, payment receipts, portfolio allocations, and party-specific audit visibility.
 
 The repository now also includes a TypeScript/Next.js integration scaffold for Dynamic onboarding, Dynamic Flow funding, a server-wallet-backed payroll agent, SQLite persistence, and Canton JSON API orchestration.
+It also includes the Blink secondary deposit path and an EVM settlement vault used as funding evidence before private Canton crediting.
 
 ## App + Integration Scaffold
 
@@ -12,6 +13,7 @@ Workspace layout:
 - `packages/shared`: shared request/response schemas and DTOs.
 - `packages/canton-client`: small Canton JSON API wrapper with demo-mode fallback.
 - `packages/dynamic-integration`: Dynamic Flow availability helpers and agent wallet adapter.
+- `contracts`: Hardhat workspace for `PreoFundingVault` and `MockUSDC`.
 - `daml`: existing Canton/Daml private ledger package.
 
 Install and run:
@@ -32,6 +34,9 @@ Core app/API routes:
 - `GET /api/funding/flow/[transactionId]` returns stored Flow/funding status.
 - `POST /api/funding/flow/webhook` records Dynamic webhook events and creates a Canton `PayrollCredit` when settlement completes.
 - `POST /api/funding/direct-deposit` creates a direct testnet/demo funding intent and Canton `PayrollCredit`.
+- `POST /api/funding/blink/session` returns the Blink signer path, settlement chain, token, and Preo funding vault destination.
+- `POST /api/blink/sign-payment` signs a Blink payment payload server-side with P-256/SHA-256 and returns no private key material.
+- `POST /api/funding/evm/verify-deposit` verifies a `PreoFundingVault` event in an EVM receipt and creates the private Canton `PayrollCredit`.
 - `POST /api/agent/execute-approved-action` executes an approved pending action through the agent wallet and records the Canton execution.
 - `GET /api/agent/actions` returns recent agent execution records.
 
@@ -42,7 +47,10 @@ pnpm daml:test
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm contracts:test
 DEMO_MODE=true pnpm smoke:flow
+DEMO_MODE=true pnpm smoke:blink
+DEMO_MODE=true pnpm smoke:evm-funding
 DEMO_MODE=true pnpm smoke:agent-wallet
 DEMO_MODE=true pnpm smoke:full-flow
 ```
@@ -75,9 +83,51 @@ DYNAMIC_AGENT_KEY_SHARES_JSON=
 SETTLEMENT_CHAIN_ID=84532
 SETTLEMENT_RPC_URL=
 TESTNET_USDC_ADDRESS=
+PREO_FUNDING_VAULT_ADDRESS=
+DEPLOYER_PRIVATE_KEY=
+DEPLOY_MOCK_USDC=true
 ```
 
 For burner-key demos, `DYNAMIC_AGENT_PRIVATE_KEY` can be used by the adapter, but do not commit it. If no live wallet metadata/private key is configured and `DEMO_MODE=true`, the adapter returns simulated transaction hashes.
+
+### EVM Funding Vault
+
+The settlement vault is the shared evidence layer for Dynamic Flow, Blink, and direct testnet fallback deposits. It is not the private ledger; verified vault events are converted into private Canton `PayrollCredit` contracts by the backend.
+
+```sh
+pnpm contracts:compile
+pnpm contracts:test
+SETTLEMENT_RPC_URL=... DEPLOYER_PRIVATE_KEY=... pnpm contracts:deploy
+```
+
+The deploy script writes:
+
+```text
+contracts/deployments/preo-funding-vault.json
+```
+
+If `TESTNET_USDC_ADDRESS` is absent or `DEPLOY_MOCK_USDC=true`, the deploy script deploys `MockUSDC`, configures it as a supported token, and records the address as `TestnetUSDC`. Copy the resulting vault/token addresses into `.env.local`.
+
+The vault emits:
+
+- `PreoDepositReceived` from `depositFor(preoUserIdHash, token, amount, externalRef)`.
+- `PayrollDepositRecorded` from an authorized owner/agent for demo payroll evidence.
+- `PreoWithdrawalExecuted` from authorized vault withdrawals.
+
+The verifier route requires `SETTLEMENT_RPC_URL` for live receipt checks. In `DEMO_MODE=true` with no RPC URL, it returns a clearly demo-mode verification result for local smoke testing.
+
+### Blink Configuration
+
+Required for live Blink signing:
+
+```text
+BLINK_MERCHANT_ID=
+BLINK_MERCHANT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+BLINK_WEBHOOK_SECRET=
+NEXT_PUBLIC_BLINK_MERCHANT_ID=
+```
+
+Blink is wired as a secondary deposit path. The web app requests `/api/funding/blink/session`, then asks `/api/blink/sign-payment` to sign a short-lived payload whose destination is `PREO_FUNDING_VAULT_ADDRESS`. The private merchant key is only read by the server route, and signer responses set `Cache-Control: no-store`.
 
 ### Canton JSON API Configuration
 
