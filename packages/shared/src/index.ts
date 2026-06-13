@@ -8,6 +8,10 @@ export const optionalHexAddressSchema = z.union([hexAddressSchema, z.literal("")
   return value === "" ? undefined : value;
 });
 
+export const txHashSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{64}$/, "expected an EVM transaction hash");
+
 export const amountStringSchema = z
   .string()
   .trim()
@@ -44,6 +48,28 @@ export const directDepositRequestSchema = z.object({
   sourceRef: z.string().optional()
 });
 
+export const blinkSessionRequestSchema = z.object({
+  dynamicUserId: z.string().min(1),
+  amount: amountStringSchema.optional()
+});
+
+export const blinkSignPaymentRequestSchema = z.object({
+  amount: amountStringSchema,
+  chainId: z.number().int().positive(),
+  address: hexAddressSchema,
+  token: hexAddressSchema,
+  callbackScheme: z.null().optional()
+});
+
+export const evmVerifyDepositRequestSchema = z.object({
+  dynamicUserId: z.string().min(1),
+  txHash: txHashSchema,
+  chainId: z.number().int().positive().optional(),
+  expectedLogIndex: z.number().int().nonnegative().optional(),
+  demoAmount: amountStringSchema.optional(),
+  sourceRef: z.string().optional()
+});
+
 export const executeApprovedActionRequestSchema = z.object({
   dynamicUserId: z.string().min(1),
   pendingActionContractId: z.string().min(1),
@@ -66,6 +92,7 @@ export const fundingStatusSchema = z.enum([
   "flow_unavailable_use_direct_deposit",
   "awaiting_user_action",
   "settled",
+  "verified",
   "failed"
 ]);
 export type FundingStatus = z.infer<typeof fundingStatusSchema>;
@@ -74,6 +101,9 @@ export type BootstrapRequest = z.infer<typeof bootstrapRequestSchema>;
 export type BootstrapResponse = z.infer<typeof bootstrapResponseSchema>;
 export type FlowCheckoutRequest = z.infer<typeof flowCheckoutRequestSchema>;
 export type DirectDepositRequest = z.infer<typeof directDepositRequestSchema>;
+export type BlinkSessionRequest = z.infer<typeof blinkSessionRequestSchema>;
+export type BlinkSignPaymentRequest = z.infer<typeof blinkSignPaymentRequestSchema>;
+export type EvmVerifyDepositRequest = z.infer<typeof evmVerifyDepositRequestSchema>;
 export type ExecuteApprovedActionRequest = z.infer<typeof executeApprovedActionRequestSchema>;
 
 export function makeDemoTxHash(prefix = "preo"): `0x${string}` {
