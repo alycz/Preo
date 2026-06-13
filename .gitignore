@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.dynamic-agent-wallet.local.json
 daml/.daml/
 apps/web/prisma/dev.db*
 apps/web/dev.db*

@@ -16,6 +16,9 @@ function verifySignature(rawBody: string, signature: string | null) {
   }
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
   const normalized = signature.replace(/^sha256=/, "");
+  if (expected.length !== normalized.length) {
+    return false;
+  }
   return timingSafeEqual(Buffer.from(expected), Buffer.from(normalized));
 }
 

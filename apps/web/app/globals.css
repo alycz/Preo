@@ -204,6 +204,24 @@ nav a.active,
   justify-content: flex-end;
 }
 
+.deployment-banner {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 22px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.deployment-banner.demo {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.deployment-banner.live {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.7fr);

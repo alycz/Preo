@@ -11,13 +11,13 @@ export async function POST(request: Request) {
     const config = getSettlementConfig();
 
     if (input.chainId !== config.chainId) {
-      return ok({ error: `Unsupported settlement chain ${input.chainId}` }, { status: 400 });
+      return errorResponse(new Error(`Unsupported settlement chain ${input.chainId}`), 400);
     }
     if (input.token.toLowerCase() !== config.tokenAddress.toLowerCase()) {
-      return ok({ error: "Unsupported settlement token" }, { status: 400 });
+      return errorResponse(new Error("Unsupported settlement token"), 400);
     }
     if (input.address.toLowerCase() !== config.vaultAddress.toLowerCase()) {
-      return ok({ error: "Blink destination must be the Preo funding vault" }, { status: 400 });
+      return errorResponse(new Error("Blink destination must be the Preo funding vault"), 400);
     }
 
     const signed = createBlinkSignedPayload(input, {

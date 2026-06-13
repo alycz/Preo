@@ -1,4 +1,4 @@
-import { createDynamicFlowConfigFromEnv, getFlowAvailability } from "@preo/dynamic-integration";
+import { createDynamicFlowConfigFromEnv, createFlowCheckoutTransaction, getFlowAvailability } from "@preo/dynamic-integration";
 import { flowCheckoutRequestSchema } from "@preo/shared";
 import { errorResponse, ok, parseJson } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
@@ -36,17 +36,27 @@ export async function POST(request: Request) {
       });
     }
 
-    const transactionId = `flow-local-${Date.now()}`;
+    const checkout = await createFlowCheckoutTransaction(config, {
+      amount: input.amount,
+      currency: input.currency,
+      purpose: input.purpose,
+      userId: user.id
+    });
+    const metadata: Record<string, unknown> = { purpose: input.purpose, flowStatus: checkout.status };
+    if ("reason" in checkout) {
+      metadata.reason = checkout.reason;
+    }
+
     const intent = await prisma.fundingIntent.create({
       data: {
         userId: user.id,
         provider: "dynamic_flow",
         checkoutId: availability.checkoutId,
-        transactionId,
+        transactionId: checkout.transactionId,
         amount: input.amount,
         token: input.currency,
-        status: "awaiting_user_action",
-        metadata: { purpose: input.purpose }
+        status: checkout.status === "flow_transaction_created" ? "awaiting_user_action" : "flow_scaffold_ready",
+        metadata
       }
     });
 
@@ -54,9 +64,10 @@ export async function POST(request: Request) {
       provider: "dynamic_flow",
       fundingIntentId: intent.id,
       checkoutId: availability.checkoutId,
-      transactionId,
+      transactionId: checkout.transactionId,
       status: intent.status,
-      nextAction: "start_dynamic_flow_checkout_in_client"
+      nextAction: checkout.nextAction,
+      reason: "reason" in checkout ? checkout.reason : undefined
     });
   } catch (error) {
     return errorResponse(error);

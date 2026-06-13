@@ -10,6 +10,7 @@ Evidence:
 - Party visibility demonstrates that employers, recipients, operators, and unrelated users do not see private salary allocation data.
 - `Preo.Test.runPrivacyDemo` validates the privacy model.
 - The app exposes party-view screens for user, employer, recipient, operator, and other user.
+- `/api/health/canton`, `pnpm smoke:canton`, and `scripts/update-canton-deployment.ts` make DevNet/package readiness explicit.
 
 ## Dynamic: Best Agentic Build
 
@@ -21,6 +22,7 @@ Evidence:
 - Dynamic Flow funding scaffold and fallback.
 - Agent wallet adapter for signing and approved testnet execution.
 - `DEMO_MODE=true pnpm smoke:dynamic` validates Flow availability and agent wallet signing path.
+- The wallet path supports Dynamic metadata/key shares and a burner private-key fallback for judging.
 
 ## Dynamic: Best Money App
 
@@ -41,7 +43,8 @@ Evidence:
 
 - Flow checkout route.
 - Flow webhook route.
-- Smoke script reports Flow availability or fallback reason.
+- Smoke script and `/api/health/dynamic` report Flow availability or fallback reason.
+- If sponsor Flow enablement is unavailable, the route returns `flow_scaffold_ready` instead of a fake transaction ID.
 
 ## Blink: Consumer Deposit UX
 
@@ -53,6 +56,7 @@ Evidence:
 - Blink payment signing endpoint.
 - Merchant private key stays server-side.
 - `DEMO_MODE=true pnpm smoke:blink` validates the signer response shape.
+- `/api/health/blink` reports merchant and signer readiness.
 
 ## From-Scratch Statement
 
