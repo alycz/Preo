@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { DynamicProvider } from "./providers";
+import { AppChrome } from "./ui/product";
 
 export const metadata: Metadata = {
   title: "Preo",
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <DynamicProvider>{children}</DynamicProvider>
+        <DynamicProvider>
+          <AppChrome>{children}</AppChrome>
+        </DynamicProvider>
       </body>
     </html>
   );

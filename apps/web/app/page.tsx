@@ -1,5 +1,5 @@
-import { Dashboard } from "./ui/dashboard";
+import { LandingPage } from "./ui/product";
 
 export default function Page() {
-  return <Dashboard />;
+  return <LandingPage />;
 }

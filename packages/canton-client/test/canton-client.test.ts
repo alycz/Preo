@@ -109,4 +109,40 @@ describe("CantonClient", () => {
     expect(allocation.payments).toHaveLength(0);
     expect(allocation.run.payload).toMatchObject({ status: "AllocationPartiallyPendingApproval" });
   });
+
+  it("maps custom portfolio targets through demo allocation", async () => {
+    const client = new CantonClient({ demoMode: true });
+    const user = `preo-custom-user-${Date.now()}`;
+    await client.allocateParty(user, "User");
+    const policy = await client.createPayrollPolicy(user, {
+      policyName: "Custom model policy",
+      categories: [
+        {
+          categoryId: "portfolio",
+          label: "Portfolio",
+          percentageBps: 10000,
+          categoryType: "PortfolioAllocation",
+          portfolioTarget: { custom: "Employee-defined model" },
+          requiresApproval: false
+        }
+      ]
+    });
+    const credit = await client.createPayrollCredit({
+      user,
+      amount: "1000.00",
+      asset: "USDC",
+      sourceRef: "custom-portfolio-source"
+    });
+
+    const allocation = await client.runAllocation({
+      user,
+      payrollCreditContractId: credit.contractId,
+      policyContractId: policy.contractId,
+      runId: "custom-run"
+    });
+
+    expect(allocation.portfolioAllocations[0]?.payload).toMatchObject({
+      model: { tag: "CustomPortfolio", value: "Employee-defined model" }
+    });
+  });
 });

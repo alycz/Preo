@@ -92,7 +92,9 @@ export const actionTypeSchema = z.enum([
   "ActionNewRecipient",
   "ActionLargeTransfer"
 ]);
-export const portfolioModelSchema = z.enum(["GlobalEquityBasket", "TreasuryYield", "USDCSavings"]);
+export const builtinPortfolioModelSchema = z.enum(["GlobalEquityBasket", "TreasuryYield", "USDCSavings"]);
+export const customPortfolioModelSchema = z.object({ custom: z.string().trim().min(1) });
+export const portfolioModelSchema = z.union([builtinPortfolioModelSchema, customPortfolioModelSchema]);
 export const pendingActionStatusValueSchema = z.enum(["Pending", "Approved", "Rejected", "Executed"]);
 
 export const optionalPartySchema = z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional());
