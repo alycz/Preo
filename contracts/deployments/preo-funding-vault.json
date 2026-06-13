@@ -1,0 +1,9 @@
+{
+  "chainId": 84532,
+  "chainName": "settlement",
+  "PreoFundingVault": "0x22527dB6f913FbAc2C801Dfa5a414FA83a198Ba9",
+  "TestnetUSDC": "0x6E8BeeB66B9824b088913c1947C320E2092480f6",
+  "deployer": "0x76390aAef8C1cf099cEDcD18098205e1833551d7",
+  "agent": null,
+  "deployedAt": "2026-06-13T19:16:40.400Z"
+}
