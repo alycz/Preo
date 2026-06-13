@@ -55,14 +55,19 @@ export type PolicyCategoryInput = {
   categoryType: "InternalReserve" | "ExternalPayment" | "PortfolioAllocation" | "ManualHold";
   recipientParty?: string;
   externalAddress?: string;
-  portfolioTarget?: "GlobalEquityBasket" | "TreasuryYield" | "USDCSavings" | string;
+  portfolioTarget?: PortfolioModel;
   requiresApproval: boolean;
+};
+
+type DamlPortfolioTarget = "GlobalEquityBasket" | "TreasuryYield" | "USDCSavings" | { tag: "CustomPortfolio"; value: string };
+type DamlPolicyCategoryInput = Omit<PolicyCategoryInput, "portfolioTarget"> & {
+  portfolioTarget?: DamlPortfolioTarget;
 };
 
 export type PayrollPolicyPayload = {
   user: string;
   policyName: string;
-  categories: PolicyCategoryInput[];
+  categories: DamlPolicyCategoryInput[];
   approvalRules: unknown[];
   version: number;
   active: boolean;
@@ -120,6 +125,14 @@ function demoState(): DemoState {
     parties: new Map()
   };
   return globalForDemo.preoCantonDemoState;
+}
+
+export function resetCantonDemoState() {
+  globalForDemo.preoCantonDemoState = {
+    counter: 0,
+    contracts: new Map(),
+    parties: new Map()
+  };
 }
 
 function nowIso() {
@@ -286,12 +299,16 @@ export class CantonClient {
 
   async createPayrollPolicy(user: string, input: { policyName: string; categories: PolicyCategoryInput[]; approvalRules?: unknown[]; version?: number }) {
     const timestamp = nowIso();
+    const categories = input.categories.map((category) => ({
+      ...category,
+      portfolioTarget: portfolioTargetToCanton(category.portfolioTarget)
+    }));
     return this.create<PayrollPolicyPayload>(
       PREO_MODULES.payrollPolicy,
       {
         user,
         policyName: input.policyName,
-        categories: input.categories,
+        categories,
         approvalRules: input.approvalRules ?? [],
         version: input.version ?? 1,
         active: true,
@@ -784,17 +801,29 @@ function toEnginePortfolioTarget(value: unknown): PortfolioModel | undefined {
   if (!value) {
     return undefined;
   }
+  if (typeof value === "object") {
+    const record = value as { tag?: string; value?: unknown; custom?: unknown };
+    if (record.custom) {
+      return { custom: String(record.custom) };
+    }
+    if (record.tag === "CustomPortfolio" && record.value) {
+      return { custom: String(record.value) };
+    }
+    if (record.tag === "Some") {
+      return toEnginePortfolioTarget(record.value);
+    }
+  }
   if (value === "GlobalEquityBasket" || value === "TreasuryYield" || value === "USDCSavings") {
     return value;
   }
   return { custom: String(value) };
 }
 
-function portfolioTargetToCanton(value: PortfolioModel | undefined): string | undefined {
+function portfolioTargetToCanton(value: PortfolioModel | undefined): DamlPortfolioTarget | undefined {
   if (!value) {
     return undefined;
   }
-  return typeof value === "string" ? value : value.custom;
+  return typeof value === "string" ? value : { tag: "CustomPortfolio", value: value.custom };
 }
 
 export function createCantonClientFromEnv(env: NodeJS.ProcessEnv = process.env) {

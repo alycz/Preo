@@ -173,4 +173,39 @@ describe("backend orchestration routes", () => {
     expect(visible(other.json, "Preo.Policy:PayrollPolicy")).toHaveLength(0);
     expect(visible(other.json, "Preo.Allocation:CategoryBalance")).toHaveLength(0);
   });
+
+  it("runs the full guided demo flow", async () => {
+    const [{ POST: fullFlow }, userRoute, employerRoute, recipientRoute, operatorRoute, otherRoute] = await Promise.all([
+      import("../app/api/demo/full-flow/route"),
+      import("../app/api/views/user/route"),
+      import("../app/api/views/employer/route"),
+      import("../app/api/views/recipient/route"),
+      import("../app/api/views/operator/route"),
+      import("../app/api/views/other-user/route")
+    ]);
+
+    const dynamicUserId = `full-flow-user-${Date.now()}`;
+    const response = await post(fullFlow as RoutePost, "/api/demo/full-flow", { dynamicUserId, amount: "1500.00" });
+
+    expect(response.status).toBe(200);
+    expect(response.json.policyContractId).toBeTruthy();
+    expect(response.json.cantonCreditContractId).toBeTruthy();
+    expect(response.json.approvedActionContractId).toBeTruthy();
+    expect(response.json.executedAction).toMatchObject({ status: "simulated" });
+
+    const [user, employer, recipient, operator, other] = await Promise.all([
+      get(userRoute.GET as RouteGet, `/api/views/user?dynamicUserId=${dynamicUserId}`),
+      get(employerRoute.GET as RouteGet, `/api/views/employer?dynamicUserId=${dynamicUserId}`),
+      get(recipientRoute.GET as RouteGet, `/api/views/recipient?dynamicUserId=${dynamicUserId}`),
+      get(operatorRoute.GET as RouteGet, `/api/views/operator?dynamicUserId=${dynamicUserId}`),
+      get(otherRoute.GET as RouteGet, `/api/views/other-user?dynamicUserId=${dynamicUserId}`)
+    ]);
+
+    expect(visible(user.json, "Preo.Policy:PayrollPolicy")).toHaveLength(1);
+    expect(visible(user.json, "Preo.Portfolio:PortfolioAllocation")).toHaveLength(1);
+    expect(visible(employer.json, "Preo.Payroll:EmployerPayrollNotice").length).toBeGreaterThanOrEqual(1);
+    expect(visible(recipient.json, "Preo.Payment:PaymentReceipt").length).toBeGreaterThanOrEqual(1);
+    expect(visible(operator.json, "Preo.Audit:OperatorAuditEvent").length).toBeGreaterThanOrEqual(1);
+    expect(visible(other.json, "Preo.Policy:PayrollPolicy")).toHaveLength(0);
+  });
 });

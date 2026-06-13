@@ -97,4 +97,25 @@ describe("shared schemas", () => {
     expect(result.valid).toBe(true);
     expect(result.warnings.map((warning) => warning.code)).toContain("CATEGORY_ZERO_BPS");
   });
+
+  it("accepts custom portfolio model targets", () => {
+    const policy = policyRequestSchema.parse({
+      dynamicUserId: "demo-user",
+      policyName: "Custom portfolio",
+      categories: [
+        {
+          categoryId: "portfolio",
+          label: "Portfolio",
+          percentageBps: 10000,
+          categoryType: "PortfolioAllocation",
+          portfolioTarget: { custom: "Employee-defined model" },
+          requiresApproval: true
+        }
+      ],
+      approvalRules: []
+    });
+
+    const result = validatePolicyInput(policy);
+    expect(result.valid).toBe(true);
+  });
 });
