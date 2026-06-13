@@ -1,0 +1,37 @@
+{
+  "name": "@preo/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "smoke:flow": "tsx scripts/smoke-flow-checkout.ts",
+    "smoke:agent-wallet": "tsx scripts/smoke-agent-wallet.ts",
+    "smoke:full-flow": "tsx scripts/smoke-full-flow.ts"
+  },
+  "dependencies": {
+    "@dynamic-labs/ethereum": "^4.88.5",
+    "@dynamic-labs/sdk-react-core": "^4.88.5",
+    "@prisma/client": "6.19.3",
+    "@preo/canton-client": "workspace:*",
+    "@preo/dynamic-integration": "workspace:*",
+    "@preo/shared": "workspace:*",
+    "next": "^16.0.8",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "prisma": "6.19.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}

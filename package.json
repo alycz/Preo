@@ -1,0 +1,24 @@
+{
+  "name": "preo",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "dev": "pnpm --filter @preo/web dev",
+    "build": "pnpm --filter @preo/web build",
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "daml:test": "cd daml && JAVA_HOME=/opt/homebrew/opt/openjdk@17 PATH=\"/opt/homebrew/opt/openjdk@17/bin:$HOME/.daml/bin:$PATH\" daml test",
+    "prisma:generate": "pnpm --filter @preo/web prisma:generate",
+    "prisma:migrate": "pnpm --filter @preo/web prisma:migrate",
+    "smoke:flow": "pnpm --filter @preo/web smoke:flow",
+    "smoke:agent-wallet": "pnpm --filter @preo/web smoke:agent-wallet",
+    "smoke:full-flow": "pnpm --filter @preo/web smoke:full-flow"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}
