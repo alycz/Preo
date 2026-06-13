@@ -20,6 +20,8 @@ model User {
   fundingIntents FundingIntent[]
   agentActions   AgentAction[]
   evmEvents      EvmEvent[]
+  policyCaches   PolicyCache[]
+  cantonContracts CantonContract[]
 }
 
 model FundingIntent {
@@ -94,4 +96,40 @@ model AgentAction {
   updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
+}
+
+model CantonContract {
+  id          String    @id @default(cuid())
+  userId      String?
+  contractId  String    @unique
+  templateId  String
+  partyId     String
+  status      String
+  payload     Json
+  createdAt   DateTime  @default(now())
+  archivedAt  DateTime?
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model PolicyCache {
+  id               String   @id @default(cuid())
+  userId           String
+  cantonContractId String
+  version          Int
+  policyName       String
+  categories       Json
+  approvalRules    Json
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model DemoParty {
+  id            String   @id @default(cuid())
+  role          String   @unique
+  cantonPartyId String
+  displayName   String
+  createdAt     DateTime @default(now())
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { blinkSignPaymentRequestSchema, bootstrapRequestSchema, directDepositRequestSchema, evmVerifyDepositRequestSchema } from "../src/index";
+import {
+  blinkSignPaymentRequestSchema,
+  bootstrapRequestSchema,
+  directDepositRequestSchema,
+  evmVerifyDepositRequestSchema,
+  policyRequestSchema,
+  validatePolicyInput
+} from "../src/index";
 
 describe("shared schemas", () => {
   it("accepts bootstrap requests without a wallet address for demo auth", () => {
@@ -28,5 +35,37 @@ describe("shared schemas", () => {
         txHash: "0x1234"
       })
     ).toThrow();
+  });
+
+  it("validates policy bps totals and required category fields", () => {
+    const policy = policyRequestSchema.parse({
+      dynamicUserId: "demo-user",
+      policyName: "Demo",
+      categories: [
+        {
+          categoryId: "rent",
+          label: "Rent",
+          percentageBps: 5000,
+          categoryType: "ExternalPayment",
+          requiresApproval: false
+        },
+        {
+          categoryId: "portfolio",
+          label: "Portfolio",
+          percentageBps: 4000,
+          categoryType: "PortfolioAllocation",
+          requiresApproval: true
+        }
+      ],
+      approvalRules: []
+    });
+
+    const result = validatePolicyInput(policy);
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((error) => error.code)).toEqual([
+      "POLICY_PERCENTAGE_SUM_INVALID",
+      "CATEGORY_MISSING_RECIPIENT",
+      "CATEGORY_MISSING_PORTFOLIO_TARGET"
+    ]);
   });
 });

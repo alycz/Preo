@@ -37,8 +37,15 @@ Core app/API routes:
 - `POST /api/funding/blink/session` returns the Blink signer path, settlement chain, token, and Preo funding vault destination.
 - `POST /api/blink/sign-payment` signs a Blink payment payload server-side with P-256/SHA-256 and returns no private key material.
 - `POST /api/funding/evm/verify-deposit` verifies a `PreoFundingVault` event in an EVM receipt and creates the private Canton `PayrollCredit`.
+- `POST /api/policy/validate`, `POST /api/policy`, and `GET /api/policy` validate, create, cache, and read the active user payroll policy.
+- `POST /api/allocation/run` and `GET /api/allocation/history` execute the deterministic payroll allocation and list allocation runs.
+- `GET /api/approvals`, `POST /api/approvals/[id]/approve`, and `POST /api/approvals/[id]/reject` expose user-owned Canton pending actions.
 - `POST /api/agent/execute-approved-action` executes an approved pending action through the agent wallet and records the Canton execution.
 - `GET /api/agent/actions` returns recent agent execution records.
+- `GET /api/dashboard` aggregates the user's private Canton payroll state for the UI.
+- `GET /api/portfolio` lists private portfolio allocation records.
+- `GET /api/views/user|employer|recipient|operator|other-user` queries Canton as each party for the privacy demo.
+- `POST /api/demo/employer/send-payroll` and `POST /api/demo/payroll/confirm-testnet-deposit` provide demo-mode payroll funding paths.
 
 Useful checks:
 
