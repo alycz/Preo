@@ -62,10 +62,39 @@ describe("shared schemas", () => {
 
     const result = validatePolicyInput(policy);
     expect(result.valid).toBe(false);
-    expect(result.errors.map((error) => error.code)).toEqual([
+    expect(result.errors.map((error) => error.code)).toEqual(expect.arrayContaining([
       "POLICY_PERCENTAGE_SUM_INVALID",
       "CATEGORY_MISSING_RECIPIENT",
       "CATEGORY_MISSING_PORTFOLIO_TARGET"
-    ]);
+    ]));
+    expect(result.errors.map((error) => error.path)).toContain("categories[1].portfolioTarget");
+  });
+
+  it("returns engine warnings through the compatibility validator", () => {
+    const policy = policyRequestSchema.parse({
+      dynamicUserId: "demo-user",
+      policyName: "Demo",
+      categories: [
+        {
+          categoryId: "reserve",
+          label: "Reserve",
+          percentageBps: 10000,
+          categoryType: "InternalReserve",
+          requiresApproval: false
+        },
+        {
+          categoryId: "future",
+          label: "Future",
+          percentageBps: 0,
+          categoryType: "ManualHold",
+          requiresApproval: false
+        }
+      ],
+      approvalRules: []
+    });
+
+    const result = validatePolicyInput(policy);
+    expect(result.valid).toBe(true);
+    expect(result.warnings.map((warning) => warning.code)).toContain("CATEGORY_ZERO_BPS");
   });
 });

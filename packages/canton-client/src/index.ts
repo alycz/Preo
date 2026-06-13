@@ -1,3 +1,5 @@
+import { actionTypeFromDaml, actionTypeToDaml, buildAllocationPlan, type ApprovalRule, type PayrollPolicy, type PortfolioModel } from "@preo/policy-engine";
+
 export type CantonJsonApiVersion = "v1" | "v2";
 
 export type CantonClientConfig = {
@@ -170,23 +172,6 @@ function visibleTo(contract: StoredContract, party: string) {
     default:
       return payload.user === party;
   }
-}
-
-function categoryActionType(categoryType: string) {
-  if (categoryType === "ExternalPayment") {
-    return "ActionExternalPayment";
-  }
-  if (categoryType === "PortfolioAllocation") {
-    return "ActionPortfolioAllocation";
-  }
-  if (categoryType === "ManualHold") {
-    return "ActionExternalWithdrawal";
-  }
-  return "ActionLargeTransfer";
-}
-
-function categoryRecipient(category: Record<string, unknown>) {
-  return String(category.recipientParty ?? fromMaybeText(category.recipient) ?? "");
 }
 
 export class CantonClient {
@@ -658,74 +643,77 @@ export class CantonClient {
     const runPayload = runContract.payload as Record<string, unknown>;
     const runId = String(runPayload.runId);
     const now = String(argument.now ?? nowIso());
-    const payrollAmount = amountNumber(creditPayload.amount);
-    const lines = policyPayload.categories.map((category) => {
-      const amount = payrollAmount * category.percentageBps / 10000;
-      return {
-        categoryId: category.categoryId,
-        label: category.label,
-        categoryType: category.categoryType,
-        percentageBps: decimal(category.percentageBps),
-        amount: formatAmount(amount),
-        requiresApproval: category.requiresApproval
-      };
-    });
+    const plan = buildAllocationPlan(
+      toEnginePolicy(policyPayload),
+      {
+        creditId: creditCid,
+        amount: String(creditPayload.amount ?? "0"),
+        asset: String(creditPayload.asset ?? ""),
+        sourceRef: String(creditPayload.sourceRef ?? creditCid)
+      },
+      { runId }
+    );
 
-    for (const category of policyPayload.categories) {
-      const amount = payrollAmount * category.percentageBps / 10000;
-      const amountText = formatAmount(amount);
+    for (const line of [...plan.immediateInternalBalances, ...plan.manualHolds]) {
       this.demoCreate(PREO_MODULES.categoryBalance, {
         user: actAs,
-        categoryId: category.categoryId,
-        label: category.label,
-        categoryType: category.categoryType,
-        asset: creditPayload.asset,
-        balance: amountText,
+        categoryId: line.categoryId,
+        label: line.label,
+        categoryType: line.categoryType,
+        asset: line.asset,
+        balance: formatAmount(line.amount),
         sourceRunId: runId,
         updatedAt: now,
         archived: false
       });
-      if (category.requiresApproval) {
-        this.demoCreate(PREO_MODULES.pendingAction, {
-          user: actAs,
-          actionId: `${runId}:${category.categoryId}`,
-          actionType: categoryActionType(category.categoryType),
-          categoryId: category.categoryId,
-          label: category.label,
-          amount: amountText,
-          asset: String(creditPayload.asset),
-          recipient: category.recipientParty ?? null,
-          externalAddress: category.externalAddress ?? null,
-          portfolioTarget: category.portfolioTarget ?? null,
-          reason: "Category requires user approval",
-          status: "Pending",
-          createdAt: now
-        });
-      } else if (category.categoryType === "ExternalPayment" && categoryRecipient(category)) {
+    }
+
+    for (const pending of plan.pendingActions) {
+      this.demoCreate(PREO_MODULES.pendingAction, {
+        user: actAs,
+        actionId: pending.actionId,
+        actionType: actionTypeToDaml(pending.actionType),
+        categoryId: pending.categoryId,
+        label: pending.label,
+        amount: formatAmount(pending.amount),
+        asset: pending.asset,
+        recipient: pending.recipientParty ?? null,
+        externalAddress: pending.externalAddress ?? null,
+        portfolioTarget: portfolioTargetToCanton(pending.portfolioTarget) ?? null,
+        reason: pending.reason,
+        status: "Pending",
+        createdAt: now
+      });
+    }
+
+    for (const payment of plan.immediatePayments) {
+      if (payment.recipientParty) {
         this.demoCreate(PREO_MODULES.paymentReceipt, {
           payer: actAs,
-          recipient: categoryRecipient(category),
-          amount: amountText,
-          asset: creditPayload.asset,
-          memo: category.label,
+          recipient: payment.recipientParty,
+          amount: formatAmount(payment.amount),
+          asset: payment.asset,
+          memo: payment.label,
           runId,
           evmTxHash: { tag: "None" },
           createdAt: now,
           acknowledged: false
         });
-      } else if (category.categoryType === "PortfolioAllocation" && category.portfolioTarget) {
-        this.demoCreate(PREO_MODULES.portfolioAllocation, {
-          user: actAs,
-          portfolioId: category.categoryId,
-          label: category.label,
-          amount: amountText,
-          asset: creditPayload.asset,
-          model: category.portfolioTarget,
-          sourceRunId: runId,
-          createdAt: now,
-          archived: false
-        });
       }
+    }
+
+    for (const allocation of plan.immediatePortfolioAllocations) {
+      this.demoCreate(PREO_MODULES.portfolioAllocation, {
+        user: actAs,
+        portfolioId: allocation.categoryId,
+        label: allocation.label,
+        amount: formatAmount(allocation.amount),
+        asset: allocation.asset,
+        model: portfolioTargetToCanton(allocation.portfolioTarget),
+        sourceRunId: runId,
+        createdAt: now,
+        archived: false
+      });
     }
 
     this.archive(creditCid);
@@ -736,11 +724,77 @@ export class CantonClient {
       policyVersion: policyPayload.version,
       payrollAmount: creditPayload.amount,
       asset: creditPayload.asset,
-      lines,
-      status: policyPayload.categories.some((category) => category.requiresApproval) ? "AllocationPartiallyPendingApproval" : "AllocationExecuted",
+      lines: plan.lines.map((line) => ({
+        categoryId: line.categoryId,
+        label: line.label,
+        categoryType: line.categoryType,
+        percentageBps: decimal(line.percentageBps),
+        amount: formatAmount(line.amount),
+        requiresApproval: line.requiresApproval
+      })),
+      status: plan.status === "PartiallyPendingApproval" ? "AllocationPartiallyPendingApproval" : "AllocationExecuted",
       createdAt: now
     });
   }
+}
+
+function toEnginePolicy(policy: PayrollPolicyPayload): PayrollPolicy {
+  return {
+    policyName: policy.policyName,
+    version: policy.version,
+    categories: policy.categories.map((category) => ({
+      categoryId: category.categoryId,
+      label: category.label,
+      percentageBps: category.percentageBps,
+      categoryType: category.categoryType,
+      recipientParty: category.recipientParty,
+      externalAddress: category.externalAddress,
+      portfolioTarget: toEnginePortfolioTarget(category.portfolioTarget),
+      requiresApproval: category.requiresApproval
+    })),
+    approvalRules: toEngineApprovalRules(policy.approvalRules)
+  };
+}
+
+function toEngineApprovalRules(rules: unknown[]): ApprovalRule[] {
+  return rules.flatMap((rule) => {
+    if (!rule || typeof rule !== "object") {
+      return [];
+    }
+    const record = rule as Record<string, unknown>;
+    const ruleId = String(record.ruleId ?? "");
+    const actionType = String(record.actionType ?? "");
+    if (!ruleId || !actionType) {
+      return [];
+    }
+    return [
+      {
+        ruleId,
+        actionType: actionTypeFromDaml(actionType),
+        enabled: Boolean(record.enabled),
+        thresholdAmount: record.thresholdAmount === undefined || record.thresholdAmount === null ? undefined : amountNumber(record.thresholdAmount),
+        appliesToCategoryId: typeof record.appliesToCategoryId === "string" && record.appliesToCategoryId ? record.appliesToCategoryId : undefined,
+        description: String(record.description ?? "")
+      }
+    ];
+  });
+}
+
+function toEnginePortfolioTarget(value: unknown): PortfolioModel | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value === "GlobalEquityBasket" || value === "TreasuryYield" || value === "USDCSavings") {
+    return value;
+  }
+  return { custom: String(value) };
+}
+
+function portfolioTargetToCanton(value: PortfolioModel | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return typeof value === "string" ? value : value.custom;
 }
 
 export function createCantonClientFromEnv(env: NodeJS.ProcessEnv = process.env) {

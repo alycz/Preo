@@ -54,12 +54,59 @@ describe("CantonClient", () => {
       runId: "demo-run"
     });
 
-    expect(allocation.balances).toHaveLength(2);
+    expect(allocation.balances).toHaveLength(0);
     expect(allocation.pendingActions).toHaveLength(1);
+    expect(allocation.lines.map((line) => line.amount)).toEqual(["500.0", "500.0"]);
     expect((await client.partyView("preo-recipient"))["Preo.Payment:PaymentReceipt"]).toHaveLength(1);
     expect((await client.partyView("preo-recipient"))["Preo.Policy:PayrollPolicy"]).toHaveLength(0);
 
     const approved = await client.approvePendingAction(allocation.pendingActions[0]!.contractId, user);
     expect(approved.payload).toMatchObject({ status: "Approved" });
+  });
+
+  it("uses approval rules when running demo allocation", async () => {
+    const client = new CantonClient({ demoMode: true });
+    const user = `preo-rule-user-${Date.now()}`;
+    await client.allocateParty(user, "User");
+    await client.allocateParty("preo-recipient", "Recipient");
+    const policy = await client.createPayrollPolicy(user, {
+      policyName: "Rule policy",
+      categories: [
+        {
+          categoryId: "rent",
+          label: "Rent",
+          percentageBps: 10000,
+          categoryType: "ExternalPayment",
+          recipientParty: "preo-recipient",
+          requiresApproval: false
+        }
+      ],
+      approvalRules: [
+        {
+          ruleId: "large-payment",
+          actionType: "ActionExternalPayment",
+          enabled: true,
+          thresholdAmount: "500.0",
+          description: "Large payments require review"
+        }
+      ]
+    });
+    const credit = await client.createPayrollCredit({
+      user,
+      amount: "1000.00",
+      asset: "USDC",
+      sourceRef: "demo-rule-source"
+    });
+
+    const allocation = await client.runAllocation({
+      user,
+      payrollCreditContractId: credit.contractId,
+      policyContractId: policy.contractId,
+      runId: "demo-rule-run"
+    });
+
+    expect(allocation.pendingActions).toHaveLength(1);
+    expect(allocation.payments).toHaveLength(0);
+    expect(allocation.run.payload).toMatchObject({ status: "AllocationPartiallyPendingApproval" });
   });
 });

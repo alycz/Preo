@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { actionTypeFromDaml, validatePolicy, type ApprovalRule as EngineApprovalRule, type PayrollPolicy } from "@preo/policy-engine";
 
 export const hexAddressSchema = z
   .string()
@@ -131,9 +132,19 @@ export const policyRequestSchema = policyInputSchema.extend({
 });
 
 export const policyValidationErrorCodeSchema = z.enum([
+  "POLICY_NAME_REQUIRED",
+  "POLICY_CATEGORIES_REQUIRED",
   "POLICY_PERCENTAGE_SUM_INVALID",
+  "CATEGORY_ID_REQUIRED",
+  "CATEGORY_ID_DUPLICATE",
+  "CATEGORY_LABEL_REQUIRED",
+  "CATEGORY_PERCENTAGE_INVALID",
   "CATEGORY_MISSING_RECIPIENT",
-  "CATEGORY_MISSING_PORTFOLIO_TARGET"
+  "CATEGORY_MISSING_PORTFOLIO_TARGET",
+  "CATEGORY_EXTERNAL_ADDRESS_INVALID",
+  "APPROVAL_RULE_ID_REQUIRED",
+  "APPROVAL_RULE_ID_DUPLICATE",
+  "APPROVAL_RULE_THRESHOLD_INVALID"
 ]);
 
 export const allocationRunRequestSchema = z.object({
@@ -207,34 +218,69 @@ export type ApiErrorCode =
   | "DYNAMIC_WALLET_TX_FAILED"
   | "DEMO_MODE_DISABLED";
 
-export function validatePolicyInput(policy: PolicyInput): { valid: true; errors: [] } | { valid: false; errors: Array<{ code: PolicyValidationErrorCode; message: string; categoryId?: string }> } {
-  const errors: Array<{ code: PolicyValidationErrorCode; message: string; categoryId?: string }> = [];
-  const totalBps = policy.categories.reduce((sum, category) => sum + category.percentageBps, 0);
-  if (totalBps !== 10000) {
-    errors.push({
-      code: "POLICY_PERCENTAGE_SUM_INVALID",
-      message: "Policy category percentages must sum to 10000 basis points"
-    });
+export function validatePolicyInput(
+  policy: PolicyInput
+):
+  | { valid: true; errors: []; warnings: Array<{ code: string; message: string; path: string }> }
+  | { valid: false; errors: Array<{ code: PolicyValidationErrorCode; message: string; categoryId?: string; path: string }>; warnings: Array<{ code: string; message: string; path: string }> } {
+  const result = validatePolicy(toEnginePolicy(policy));
+  const warnings = result.warnings.map((warning) => ({ code: warning.code, message: warning.message, path: warning.path }));
+  if (result.ok) {
+    return { valid: true, errors: [], warnings };
   }
+  const errors = result.errors
+    .map((error) => ({
+      code: policyValidationErrorCodeSchema.parse(error.code),
+      message: error.message,
+      categoryId: categoryIdFromPath(policy, error.path),
+      path: error.path
+    }))
+    .sort((left, right) => validationPriority(left.code) - validationPriority(right.code));
+  return {
+    valid: false,
+    errors,
+    warnings
+  };
+}
 
-  for (const category of policy.categories) {
-    if (category.categoryType === "ExternalPayment" && !category.recipientParty && !category.externalAddress) {
-      errors.push({
-        code: "CATEGORY_MISSING_RECIPIENT",
-        message: "External payment categories require a recipient party or external address",
-        categoryId: category.categoryId
-      });
-    }
-    if (category.categoryType === "PortfolioAllocation" && !category.portfolioTarget) {
-      errors.push({
-        code: "CATEGORY_MISSING_PORTFOLIO_TARGET",
-        message: "Portfolio allocation categories require a portfolio target",
-        categoryId: category.categoryId
-      });
-    }
+function validationPriority(code: PolicyValidationErrorCode): number {
+  return code === "POLICY_PERCENTAGE_SUM_INVALID" ? 0 : 1;
+}
+
+function toEnginePolicy(policy: PolicyInput): PayrollPolicy {
+  return {
+    policyName: policy.policyName,
+    categories: policy.categories.map((category) => ({
+      categoryId: category.categoryId,
+      label: category.label,
+      percentageBps: category.percentageBps,
+      categoryType: category.categoryType,
+      recipientParty: category.recipientParty,
+      externalAddress: category.externalAddress,
+      portfolioTarget: category.portfolioTarget,
+      requiresApproval: category.requiresApproval
+    })),
+    approvalRules: policy.approvalRules.map(
+      (rule): EngineApprovalRule => ({
+        ruleId: rule.ruleId,
+        actionType: actionTypeFromDaml(rule.actionType),
+        enabled: rule.enabled,
+        thresholdAmount: rule.thresholdAmount === undefined ? undefined : Number(rule.thresholdAmount),
+        appliesToCategoryId: rule.appliesToCategoryId,
+        description: rule.description
+      })
+    ),
+    version: 1
+  };
+}
+
+function categoryIdFromPath(policy: PolicyInput, path: string): string | undefined {
+  const match = /^categories\[(\d+)]/.exec(path);
+  if (!match) {
+    return undefined;
   }
-
-  return errors.length ? { valid: false, errors } : { valid: true, errors: [] };
+  const index = Number(match[1]);
+  return policy.categories[index]?.categoryId;
 }
 
 export function makeDemoTxHash(prefix = "preo"): `0x${string}` {

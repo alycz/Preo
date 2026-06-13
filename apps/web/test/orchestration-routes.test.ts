@@ -165,7 +165,7 @@ describe("backend orchestration routes", () => {
     ]);
 
     expect(visible(user.json, "Preo.Policy:PayrollPolicy")).toHaveLength(1);
-    expect(visible(user.json, "Preo.Allocation:CategoryBalance")).toHaveLength(3);
+    expect(visible(user.json, "Preo.Allocation:CategoryBalance")).toHaveLength(1);
     expect(visible(employer.json, "Preo.Payroll:EmployerPayrollNotice")).toHaveLength(1);
     expect(visible(employer.json, "Preo.Policy:PayrollPolicy")).toHaveLength(0);
     expect(visible(recipient.json, "Preo.Payment:PaymentReceipt")).toHaveLength(1);
