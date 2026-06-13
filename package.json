@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @preo/web dev",
     "build": "pnpm --filter @preo/web build",
-    "typecheck": "pnpm --recursive typecheck",
+    "typecheck": "pnpm prisma:generate && pnpm --recursive typecheck",
     "test": "pnpm prisma:generate && pnpm --recursive test",
     "verify:demo": "pnpm prisma:generate && pnpm typecheck && pnpm test && pnpm build && pnpm daml:build && pnpm daml:test && DEMO_MODE=true pnpm smoke:canton && DEMO_MODE=true pnpm smoke:dynamic && DEMO_MODE=true pnpm smoke:blink && DEMO_MODE=true pnpm smoke:evm && DEMO_MODE=true pnpm smoke:full-flow",
     "contracts:compile": "pnpm --filter @preo/contracts compile",
