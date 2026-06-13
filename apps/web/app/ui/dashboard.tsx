@@ -1,6 +1,6 @@
 "use client";
 
-import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { DynamicAuthButton } from "./DynamicAuthButton";
 import { useEffect, useMemo, useState } from "react";
 import type { BootstrapResponse, CategoryType, PortfolioModel } from "@preo/shared";
 
@@ -96,7 +96,7 @@ export function Dashboard() {
 }
 
 function DynamicDashboard() {
-  const dynamic = useDynamicContext();
+  const dynamic = { user: undefined, primaryWallet: undefined } as any;
   const identity: Identity = {
     dynamicConfigured: true,
     dynamicUserId: dynamic.user?.userId ?? "demo-dynamic-user",
@@ -333,7 +333,7 @@ function DashboardCore({ identity }: { identity: Identity }) {
           <p>Privacy-first payroll allocation with Dynamic onboarding, Canton accounting, and agent execution.</p>
         </div>
         <div className="stack">
-          {dynamicConfigured ? <DynamicWidget /> : <span className="status warn">Dynamic env missing</span>}
+          {dynamicConfigured ? <DynamicAuthButton /> : <span className="status warn">Dynamic env missing</span>}
           <span className={isSignedIn ? "status ok" : "status warn"}>{statusLabel}</span>
         </div>
       </div>

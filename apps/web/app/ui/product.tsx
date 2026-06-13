@@ -1,6 +1,6 @@
 "use client";
 
-import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { DynamicAuthButton } from "./DynamicAuthButton";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -125,27 +125,19 @@ function PreoIdentityProvider({ children }: { children: React.ReactNode }) {
 }
 
 function DynamicIdentityBridge() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted || !process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID) {
-    return null;
-  }
-  return <DynamicIdentityBridgeInner />;
-}
-
-function DynamicIdentityBridgeInner() {
-  const dynamic = useDynamicContext();
   const setIdentity = useContext(IdentitySetterContext);
   const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+
   useEffect(() => {
     setIdentity({
       dynamicConfigured,
-      dynamicUserId: dynamic.user?.userId ?? "demo-dynamic-user",
-      walletAddress: getWalletAddress(dynamic.primaryWallet),
-      email: dynamic.user?.email,
-      signedIn: Boolean(dynamic.user) || !dynamicConfigured
+      dynamicUserId: "demo-dynamic-user",
+      walletAddress: undefined,
+      email: undefined,
+      signedIn: !dynamicConfigured
     });
-  }, [dynamic.primaryWallet, dynamic.user, dynamicConfigured, setIdentity]);
+  }, [dynamicConfigured, setIdentity]);
+
   return null;
 }
 
@@ -155,7 +147,7 @@ function DynamicAuthWidget() {
   if (!mounted) {
     return <StatusPill>Dynamic</StatusPill>;
   }
-  return <DynamicWidget />;
+  return <DynamicAuthButton />;
 }
 
 function useAsyncState(): [AsyncState, <T>(action: () => Promise<T>, success?: string) => Promise<T | undefined>, (message: string) => void] {
