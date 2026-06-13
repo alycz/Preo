@@ -107,6 +107,7 @@ pnpm dev
 pnpm build
 pnpm typecheck
 pnpm test
+pnpm verify:demo
 pnpm daml:test
 pnpm contracts:compile
 pnpm contracts:test
@@ -134,11 +135,7 @@ dpm sandbox --json-api-port 7575
 Smoke checks:
 
 ```sh
-DEMO_MODE=true pnpm smoke:canton
-DEMO_MODE=true pnpm smoke:dynamic
-DEMO_MODE=true pnpm smoke:blink
-DEMO_MODE=true pnpm smoke:evm
-DEMO_MODE=true pnpm smoke:full-flow
+pnpm verify:demo
 ```
 
 ## Demo Flow
@@ -160,7 +157,7 @@ Full script: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 The fastest judged deployment path is one Vercel project for the Next.js app/API:
 
 - Build command: `pnpm build`
-- Demo env: `DEMO_MODE=true`, `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`
+- Demo env: `DEMO_MODE=true`, `DATABASE_URL=file:/tmp/preo-demo.db`, `NEXT_PUBLIC_APP_URL`
 - Optional live env: Dynamic, Canton, Blink, settlement RPC, USDC, and vault values from `.env.example`
 
 Deployment details and placeholders for final URL/address/package IDs are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

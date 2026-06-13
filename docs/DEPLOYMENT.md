@@ -39,11 +39,11 @@ Required demo env:
 
 ```text
 NEXT_PUBLIC_APP_URL=https://<vercel-app-url>
-DATABASE_URL=<vercel-compatible database url>
+DATABASE_URL=file:/tmp/preo-demo.db
 DEMO_MODE=true
 ```
 
-For the fastest judged demo, keep optional live integration values empty. The app will show Flow fallback, demo Blink payload signing, demo Canton contract IDs, and simulated Dynamic agent tx hashes.
+For the fastest judged demo, keep optional live integration values empty. The app will show Flow fallback, demo Blink payload signing, demo Canton contract IDs, and simulated Dynamic agent tx hashes. In `DEMO_MODE=true` with `DATABASE_URL=file:/tmp/preo-demo.db`, the API lazily initializes the demo SQLite schema on first use so Vercel serverless functions have a writable database path.
 
 ## Optional Live Integration Env
 
@@ -150,11 +150,7 @@ Copy the vault and token addresses into deployment env.
 
 ```sh
 pnpm prisma:generate
-DEMO_MODE=true pnpm smoke:canton
-DEMO_MODE=true pnpm smoke:dynamic
-DEMO_MODE=true pnpm smoke:blink
-DEMO_MODE=true pnpm smoke:evm
-DEMO_MODE=true pnpm smoke:full-flow
+pnpm verify:demo
 ```
 
 ## Final Submission Checklist
@@ -163,7 +159,7 @@ DEMO_MODE=true pnpm smoke:full-flow
 - [ ] Vercel deployed app URL added to submission.
 - [ ] `DEMO_MODE=true` configured on Vercel.
 - [ ] `NEXT_PUBLIC_APP_URL` points to the Vercel URL.
-- [ ] `DATABASE_URL` configured for deployed app.
+- [ ] `DATABASE_URL=file:/tmp/preo-demo.db` configured for deployed demo app.
 - [ ] Daml contracts compile and `pnpm daml:test` passes.
 - [ ] Canton DevNet/package ID recorded, or demo-mode fallback clearly documented.
 - [ ] `pnpm typecheck` passes.
