@@ -1,8 +1,8 @@
 {
   "network": "canton-devnet",
-  "packageId": "",
+  "packageId": "9a01c9faee35f8b1b41c63835a686bcfd94f1b759821bbc8e330e6611dee00a9",
+  "jsonApiUrl": "https://ledger-api.validator.devnet.sandbox.fivenorth.io",
   "dar": ".daml/dist/preo-0.0.1.dar",
-  "deployedAt": "",
-  "notes": "Populate after uploading the DAR to Canton DevNet or the sponsor-approved test environment."
+  "deployedAt": "2026-06-13T22:44:33.001Z",
+  "notes": "Updated by scripts/update-canton-deployment.ts after uploading the DAR to Canton DevNet or sponsor-approved test environment."
 }
-
