@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  dynamicUserId        String   @unique
+  email                String?
+  primaryWalletAddress String?
+  agentWalletAddress   String?
+  cantonPartyId        String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  fundingIntents FundingIntent[]
+  agentActions   AgentAction[]
+}
+
+model FundingIntent {
+  id                     String   @id @default(cuid())
+  userId                 String
+  provider               String
+  checkoutId             String?
+  transactionId          String?  @unique
+  amount                 String
+  token                  String
+  status                 String
+  settlementTxHash       String?
+  cantonCreditContractId String?
+  metadata               Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model WebhookEvent {
+  id             String    @id @default(cuid())
+  provider       String
+  eventType      String
+  eventId        String?
+  payload        Json
+  signatureValid Boolean
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model AgentAction {
+  id                   String   @id @default(cuid())
+  userId               String
+  actionType           String
+  status               String
+  dynamicWalletAddress String?
+  evmTxHash            String?
+  cantonContractId     String?
+  pendingActionId      String?
+  amount               String?
+  asset                String?
+  error                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}

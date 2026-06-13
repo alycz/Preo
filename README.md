@@ -2,6 +2,94 @@
 
 Preo is a privacy-first agentic payroll neobank prototype. This repository slice contains the Canton/Daml private ledger MVP for payroll policies, private category accounting, approval actions, payment receipts, portfolio allocations, and party-specific audit visibility.
 
+The repository now also includes a TypeScript/Next.js integration scaffold for Dynamic onboarding, Dynamic Flow funding, a server-wallet-backed payroll agent, SQLite persistence, and Canton JSON API orchestration.
+
+## App + Integration Scaffold
+
+Workspace layout:
+
+- `apps/web`: Next.js App Router UI and backend route handlers.
+- `packages/shared`: shared request/response schemas and DTOs.
+- `packages/canton-client`: small Canton JSON API wrapper with demo-mode fallback.
+- `packages/dynamic-integration`: Dynamic Flow availability helpers and agent wallet adapter.
+- `daml`: existing Canton/Daml private ledger package.
+
+Install and run:
+
+```sh
+pnpm install
+cp .env.example .env.local
+DATABASE_URL=file:./dev.db pnpm prisma:migrate
+pnpm dev
+```
+
+The app defaults to `DEMO_MODE=true` behavior when Dynamic/Canton env vars are absent. In that mode the UI uses a demo Dynamic identity, Dynamic Flow returns a direct-deposit fallback, and the agent wallet returns clearly simulated transaction hashes.
+
+Core app/API routes:
+
+- `POST /api/me/bootstrap` creates or retrieves the Dynamic user -> Preo user -> Canton party mapping.
+- `POST /api/funding/flow/checkout` creates local Flow funding intent state or returns `flow_unavailable_use_direct_deposit`.
+- `GET /api/funding/flow/[transactionId]` returns stored Flow/funding status.
+- `POST /api/funding/flow/webhook` records Dynamic webhook events and creates a Canton `PayrollCredit` when settlement completes.
+- `POST /api/funding/direct-deposit` creates a direct testnet/demo funding intent and Canton `PayrollCredit`.
+- `POST /api/agent/execute-approved-action` executes an approved pending action through the agent wallet and records the Canton execution.
+- `GET /api/agent/actions` returns recent agent execution records.
+
+Useful checks:
+
+```sh
+pnpm daml:test
+pnpm typecheck
+pnpm test
+pnpm build
+DEMO_MODE=true pnpm smoke:flow
+DEMO_MODE=true pnpm smoke:agent-wallet
+DEMO_MODE=true pnpm smoke:full-flow
+```
+
+### Dynamic Configuration
+
+Required for real Dynamic auth:
+
+```text
+NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=
+DYNAMIC_ENVIRONMENT_ID=
+DYNAMIC_AUTH_TOKEN=
+```
+
+Required for Dynamic Flow:
+
+```text
+DYNAMIC_FLOW_CHECKOUT_ID=
+DYNAMIC_WEBHOOK_SECRET=
+```
+
+If Flow is not enabled for the Dynamic environment, the app keeps the Flow UI/API path visible and returns a direct testnet deposit fallback for the demo.
+
+Required for live agent wallet transactions:
+
+```text
+DYNAMIC_AGENT_WALLET_PASSWORD=
+DYNAMIC_AGENT_WALLET_METADATA_JSON=
+DYNAMIC_AGENT_KEY_SHARES_JSON=
+SETTLEMENT_CHAIN_ID=84532
+SETTLEMENT_RPC_URL=
+TESTNET_USDC_ADDRESS=
+```
+
+For burner-key demos, `DYNAMIC_AGENT_PRIVATE_KEY` can be used by the adapter, but do not commit it. If no live wallet metadata/private key is configured and `DEMO_MODE=true`, the adapter returns simulated transaction hashes.
+
+### Canton JSON API Configuration
+
+```text
+CANTON_JSON_API_URL=
+CANTON_JSON_API_VERSION=v2
+CANTON_AUTH_TOKEN=
+CANTON_PACKAGE_ID=
+```
+
+Without `CANTON_JSON_API_URL`, the app returns demo Canton contract IDs. With a live JSON API, the app creates `PayrollCredit` contracts and exercises `PendingAction.ExecuteApprovedAction` through the wrapper.
+
 ## Ledger Package
 
 The Daml project lives in `daml/` and uses SDK `3.4.11` for Canton 3.x alignment.
