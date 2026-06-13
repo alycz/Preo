@@ -105,7 +105,7 @@ const allocation = await post(runAllocation as never, "/api/allocation/run", {
   payrollCreditContractId: payroll.cantonCreditContractId,
   policyContractId: policy.policyContractId
 });
-assert(Array.isArray(allocation.balances) && allocation.balances.length === 4, "allocation should create four balances");
+assert(Array.isArray(allocation.balances) && allocation.balances.length === 2, "allocation should create internal reserve and manual hold balances");
 assert(Array.isArray(allocation.pendingActions) && allocation.pendingActions.length === 1, "allocation should create one pending approval");
 
 const approvals = await get(listApprovals, `/api/approvals?dynamicUserId=${dynamicUserId}`);
@@ -150,7 +150,7 @@ const [user, employer, recipient, operator, other] = await Promise.all([
 ]);
 
 assert(visible(user, "Preo.Policy:PayrollPolicy").length === 1, "user should see policy");
-assert(visible(user, "Preo.Allocation:CategoryBalance").length === 4, "user should see balances");
+assert(visible(user, "Preo.Allocation:CategoryBalance").length === 2, "user should see internal reserve and manual hold balances");
 assert(visible(employer, "Preo.Payroll:EmployerPayrollNotice").length === 1, "employer should see notice");
 assert(visible(employer, "Preo.Policy:PayrollPolicy").length === 0, "employer must not see policy");
 assert(visible(recipient, "Preo.Payment:PaymentReceipt").length === 1, "recipient should see only their receipt");
