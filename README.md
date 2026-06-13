@@ -1,270 +1,191 @@
 # Preo
 
-Preo is a privacy-first agentic payroll neobank prototype. This repository slice contains the Canton/Daml private ledger MVP for payroll policies, private category accounting, approval actions, payment receipts, portfolio allocations, and party-specific audit visibility.
+Preo is a privacy-first agentic payroll neobank for everyday workers. It receives stablecoin payroll, lets a worker define a custom salary policy, and routes each paycheck into private Canton-backed financial categories.
 
-The repository now also includes a TypeScript/Next.js integration scaffold for Dynamic onboarding, Dynamic Flow funding, a server-wallet-backed payroll agent, SQLite persistence, and Canton JSON API orchestration.
-It also includes the Blink secondary deposit path and an EVM settlement vault used as funding evidence before private Canton crediting.
+This is a testnet hackathon prototype built from scratch for ETHGlobal. It is not a bank account, FDIC-insured product, payroll provider, securities product, or production bridge.
 
-## App + Integration Scaffold
+## What It Does
 
-Workspace layout:
+Preo gives a worker a policy-bound payroll agent:
 
-- `apps/web`: Next.js App Router UI and backend route handlers.
-- `packages/shared`: shared request/response schemas and DTOs.
-- `packages/canton-client`: small Canton JSON API wrapper with demo-mode fallback.
-- `packages/dynamic-integration`: Dynamic Flow availability helpers and agent wallet adapter.
+1. The worker signs in and creates custom payroll categories.
+2. Payroll arrives through Dynamic Flow, Blink, or direct testnet funding evidence.
+3. The backend attests settlement evidence and credits a private Canton `PayrollCredit`.
+4. The deterministic allocation engine applies the worker's percentages exactly.
+5. Canton records private category balances, approvals, payment receipts, portfolio allocations, and audit events.
+6. Approved actions can be executed by a Dynamic server wallet on testnet.
+7. Party-view screens prove that employers, recipients, operators, and unrelated users do not see the worker's private payroll allocation.
+
+## Why Canton, Dynamic, And Blink
+
+- **Canton** is the private source of truth for neobank accounting. Daml contracts model policies, payroll credits, allocations, approvals, payments, portfolio records, and audit events with party-specific visibility.
+- **Dynamic** powers onboarding, Flow funding, and agent wallet execution for approved testnet actions.
+- **Blink** adds a secondary consumer deposit UX with a server-side signer route and no exposed merchant private key.
+- **EVM settlement** is evidence only. Canton is the private ledger; the backend is the hackathon settlement attestor.
+
+## Architecture
+
+```text
+Dynamic Flow / Blink / direct testnet deposit
+        |
+        v
+EVM settlement wallet or PreoFundingVault
+        |
+        v
+Preo backend settlement attestor
+        |
+        v
+Canton / Daml private ledger
+        |
+        v
+Policy-bound payroll allocation agent
+        |
+        v
+Private balances, approvals, receipts, portfolio records, party views
+```
+
+Repository layout:
+
+- `apps/web`: Next.js app, UI, API routes, Prisma persistence, smoke scripts.
+- `daml`: Canton/Daml private ledger package.
 - `contracts`: Hardhat workspace for `PreoFundingVault` and `MockUSDC`.
-- `daml`: existing Canton/Daml private ledger package.
+- `packages/shared`: shared schemas and DTOs.
+- `packages/policy-engine`: deterministic allocation validation and math.
+- `packages/canton-client`: Canton JSON API wrapper with demo fallback.
+- `packages/dynamic-integration`: Dynamic Flow and agent wallet adapters.
+- `docs`: architecture, privacy, deployment, demo, sponsor, and limitation docs.
 
-Install and run:
+## Privacy Model
+
+Canton parties only see contracts where they are stakeholders or observers. Preo keeps sensitive worker contracts user-only and separates employer notices, recipient receipts, and operator audit metadata.
+
+| Contract | User | Employer | Recipient | Operator | Other |
+| --- | --- | --- | --- | --- | --- |
+| `UserProfile` | yes | no | no | no | no |
+| `PayrollPolicy` | yes | no | no | no | no |
+| `PayrollCredit` | yes | no | no | no | no |
+| `CategoryBalance` | yes | no | no | no | no |
+| `AllocationRun` | yes | no | no | no | no |
+| `PendingAction` | yes | no | no | no | no |
+| `EmployerPayrollNotice` | yes | yes | no | no | no |
+| `PaymentReceipt` | yes | no | yes | no | no |
+| `PortfolioAllocation` | yes | no | no | no | no |
+| `OperatorAuditEvent` | maybe | no | no | yes | no |
+
+More detail: [docs/PRIVACY_MODEL.md](docs/PRIVACY_MODEL.md).
+
+## Local Setup
+
+Use Node 20 or 22 for deployment and Hardhat work. Local verification on Node 25 can pass, but Hardhat warns that Node 25 is unsupported.
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 cp .env.example .env.local
+pnpm prisma:generate
 DATABASE_URL=file:./dev.db pnpm prisma:migrate
 pnpm dev
 ```
 
-The app defaults to `DEMO_MODE=true` behavior when Dynamic/Canton env vars are absent. In that mode the UI uses a demo Dynamic identity, Dynamic Flow returns a direct-deposit fallback, and the agent wallet returns clearly simulated transaction hashes.
+The app defaults to `DEMO_MODE=true` behavior when live sponsor env vars are absent. In demo mode, Flow falls back to direct testnet funding, Blink signs demo payloads, Canton returns demo contract IDs, and the agent wallet returns clearly simulated transaction hashes.
 
-Core app/API routes:
+## Environment
 
-- `POST /api/me/bootstrap` creates or retrieves the Dynamic user -> Preo user -> Canton party mapping.
-- `POST /api/funding/flow/checkout` creates local Flow funding intent state or returns `flow_unavailable_use_direct_deposit`.
-- `GET /api/funding/flow/[transactionId]` returns stored Flow/funding status.
-- `POST /api/funding/flow/webhook` records Dynamic webhook events and creates a Canton `PayrollCredit` when settlement completes.
-- `POST /api/funding/direct-deposit` creates a direct testnet/demo funding intent and Canton `PayrollCredit`.
-- `POST /api/funding/blink/session` returns the Blink signer path, settlement chain, token, and Preo funding vault destination.
-- `POST /api/blink/sign-payment` signs a Blink payment payload server-side with P-256/SHA-256 and returns no private key material.
-- `POST /api/funding/evm/verify-deposit` verifies a `PreoFundingVault` event in an EVM receipt and creates the private Canton `PayrollCredit`.
-- `POST /api/policy/validate`, `POST /api/policy`, and `GET /api/policy` validate, create, cache, and read the active user payroll policy.
-- `POST /api/allocation/run` and `GET /api/allocation/history` execute the deterministic payroll allocation and list allocation runs.
-- `GET /api/approvals`, `POST /api/approvals/[id]/approve`, and `POST /api/approvals/[id]/reject` expose user-owned Canton pending actions.
-- `POST /api/agent/execute-approved-action` executes an approved pending action through the agent wallet and records the Canton execution.
-- `GET /api/agent/actions` returns recent agent execution records.
-- `GET /api/dashboard` aggregates the user's private Canton payroll state for the UI.
-- `GET /api/portfolio` lists private portfolio allocation records.
-- `GET /api/views/user|employer|recipient|operator|other-user` queries Canton as each party for the privacy demo.
-- `POST /api/demo/employer/send-payroll` and `POST /api/demo/payroll/confirm-testnet-deposit` provide demo-mode payroll funding paths.
+Copy `.env.example` to `.env.local`. For demo submission, the minimum env is:
 
-Useful checks:
+```text
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+DATABASE_URL=file:./dev.db
+DEMO_MODE=true
+```
+
+Live integrations can be enabled by adding Dynamic, Canton, Blink, RPC, USDC, and vault variables from `.env.example`. Do not commit private keys, even burner keys.
+
+## Commands
 
 ```sh
-pnpm daml:test
+pnpm dev
+pnpm build
 pnpm typecheck
 pnpm test
-pnpm build
-pnpm contracts:test
-DEMO_MODE=true pnpm smoke:flow
-DEMO_MODE=true pnpm smoke:blink
-DEMO_MODE=true pnpm smoke:evm-funding
-DEMO_MODE=true pnpm smoke:agent-wallet
-DEMO_MODE=true pnpm smoke:full-flow
-```
-
-### Dynamic Configuration
-
-Required for real Dynamic auth:
-
-```text
-NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=
-DYNAMIC_ENVIRONMENT_ID=
-DYNAMIC_AUTH_TOKEN=
-```
-
-Required for Dynamic Flow:
-
-```text
-DYNAMIC_FLOW_CHECKOUT_ID=
-DYNAMIC_WEBHOOK_SECRET=
-```
-
-If Flow is not enabled for the Dynamic environment, the app keeps the Flow UI/API path visible and returns a direct testnet deposit fallback for the demo.
-
-Required for live agent wallet transactions:
-
-```text
-DYNAMIC_AGENT_WALLET_PASSWORD=
-DYNAMIC_AGENT_WALLET_METADATA_JSON=
-DYNAMIC_AGENT_KEY_SHARES_JSON=
-SETTLEMENT_CHAIN_ID=84532
-SETTLEMENT_RPC_URL=
-TESTNET_USDC_ADDRESS=
-PREO_FUNDING_VAULT_ADDRESS=
-DEPLOYER_PRIVATE_KEY=
-DEPLOY_MOCK_USDC=true
-```
-
-For burner-key demos, `DYNAMIC_AGENT_PRIVATE_KEY` can be used by the adapter, but do not commit it. If no live wallet metadata/private key is configured and `DEMO_MODE=true`, the adapter returns simulated transaction hashes.
-
-### EVM Funding Vault
-
-The settlement vault is the shared evidence layer for Dynamic Flow, Blink, and direct testnet fallback deposits. It is not the private ledger; verified vault events are converted into private Canton `PayrollCredit` contracts by the backend.
-
-```sh
+pnpm daml:test
 pnpm contracts:compile
 pnpm contracts:test
-SETTLEMENT_RPC_URL=... DEPLOYER_PRIVATE_KEY=... pnpm contracts:deploy
+pnpm contracts:deploy
 ```
 
-The deploy script writes:
-
-```text
-contracts/deployments/preo-funding-vault.json
-```
-
-If `TESTNET_USDC_ADDRESS` is absent or `DEPLOY_MOCK_USDC=true`, the deploy script deploys `MockUSDC`, configures it as a supported token, and records the address as `TestnetUSDC`. Copy the resulting vault/token addresses into `.env.local`.
-
-The vault emits:
-
-- `PreoDepositReceived` from `depositFor(preoUserIdHash, token, amount, externalRef)`.
-- `PayrollDepositRecorded` from an authorized owner/agent for demo payroll evidence.
-- `PreoWithdrawalExecuted` from authorized vault withdrawals.
-
-The verifier route requires `SETTLEMENT_RPC_URL` for live receipt checks. In `DEMO_MODE=true` with no RPC URL, it returns a clearly demo-mode verification result for local smoke testing.
-
-### Blink Configuration
-
-Required for live Blink signing:
-
-```text
-BLINK_MERCHANT_ID=
-BLINK_MERCHANT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-BLINK_WEBHOOK_SECRET=
-NEXT_PUBLIC_BLINK_MERCHANT_ID=
-```
-
-Blink is wired as a secondary deposit path. The web app requests `/api/funding/blink/session`, then asks `/api/blink/sign-payment` to sign a short-lived payload whose destination is `PREO_FUNDING_VAULT_ADDRESS`. The private merchant key is only read by the server route, and signer responses set `Cache-Control: no-store`.
-
-### Canton JSON API Configuration
-
-```text
-CANTON_JSON_API_URL=
-CANTON_JSON_API_VERSION=v2
-CANTON_AUTH_TOKEN=
-CANTON_PACKAGE_ID=
-```
-
-Without `CANTON_JSON_API_URL`, the app returns demo Canton contract IDs. With a live JSON API, the app creates `PayrollCredit` contracts and exercises `PendingAction.ExecuteApprovedAction` through the wrapper.
-
-## Ledger Package
-
-The Daml project lives in `daml/` and uses SDK `3.4.11` for Canton 3.x alignment.
-
-Core modules:
-
-- `Preo.Types`: shared enums and record types for categories, approvals, allocation status, portfolio models, and allocation lines.
-- `Preo.User`: private `UserProfile`.
-- `Preo.Policy`: user-owned `PayrollPolicy` plus policy validation.
-- `Preo.Payroll`: employer-visible `EmployerPayrollNotice` and user-private `PayrollCredit`.
-- `Preo.Allocation`: `AllocationRun`, `CategoryBalance`, and `PendingAction`.
-- `Preo.Payment`: payer/recipient `PaymentReceipt`.
-- `Preo.Portfolio`: private `PortfolioAllocation`.
-- `Preo.Audit`: limited `OperatorAuditEvent`.
-- `Preo.Test`: Daml Script privacy and happy-path demo.
-
-## Privacy Model
-
-| Template | Signatory | Observer | Visibility intent |
-| --- | --- | --- | --- |
-| `UserProfile` | user | none | User-only account profile |
-| `PayrollPolicy` | user | none | User-only policy rules and percentages |
-| `EmployerPayrollNotice` | employer | employee | Employer sees payroll notice only |
-| `PayrollCredit` | user | none | User-only confirmed funding record |
-| `AllocationRun` | user | none | User-only allocation result |
-| `CategoryBalance` | user | none | User-only category balance delta |
-| `PendingAction` | user | none | User-only approval queue |
-| `PaymentReceipt` | payer | recipient | Payer and recipient only |
-| `PortfolioAllocation` | user | none | User-only testnet portfolio record |
-| `OperatorAuditEvent` | operator | optional user | Limited metadata, no balances or category details |
-
-The employer-visible notice is intentionally separate from private payroll credit and allocation execution. For the hackathon MVP, the backend or user submits the private `PayrollCredit` after Dynamic Flow, Blink, or direct testnet settlement evidence is confirmed.
-
-## Policy Validation
-
-`PayrollPolicy.ValidatePolicy` rejects:
-
-- empty category lists,
-- empty policy names, labels, or category IDs,
-- negative percentages,
-- percentages that do not sum exactly to `10000.0` basis points,
-- external payment categories without a Canton recipient or external address,
-- portfolio allocation categories without a target model.
-
-## Allocation Flow
-
-1. User creates a `PayrollPolicy`.
-2. Employer creates an `EmployerPayrollNotice`, visible only to employer and employee.
-3. Backend/user creates a private `PayrollCredit`.
-4. User creates an `AllocationRun` in pending form and exercises `ExecuteAllocation`.
-5. The choice validates the policy, calculates allocation amounts, creates one `CategoryBalance` delta per category, creates `PendingAction` contracts for approval-required lines, creates immediate payer/recipient receipts for non-approval Canton-party external payments, creates immediate portfolio records for non-approval portfolio allocations, and marks the payroll credit allocated.
-6. User approves and executes pending actions through `PendingAction`.
-
-## Local Setup
-
-Install or verify Daml SDK `3.4.11`, then run:
+Daml local commands:
 
 ```sh
 cd daml
 daml build
 daml test
-```
-
-On macOS with Homebrew-installed Java 17, run tests with:
-
-```sh
-cd daml
-JAVA_HOME=/opt/homebrew/opt/openjdk@17 PATH="/opt/homebrew/opt/openjdk@17/bin:$HOME/.daml/bin:$PATH" daml test
-```
-
-To run a local sandbox/JSON API after a successful build:
-
-```sh
-cd daml
 daml sandbox --json-api-port 7575 .daml/dist/preo-0.0.1.dar
 ```
 
-Expected backend operations are create, exercise, and query commands over the Canton JSON API. Canton environments may expose either classic `/v1/*` JSON API routes or newer `/v2/commands/*` and `/v2/state/*` routes; backend clients should select through `CANTON_JSON_API_VERSION`.
+For Canton 3.x/DPM environments, use the equivalent newer tooling where available:
 
-## Demo Script
-
-`Preo.Test.runPrivacyDemo` creates:
-
-- `user`,
-- `employer`,
-- `recipient`,
-- `operator`,
-- `otherUser`.
-
-It demonstrates a 2000 USDC payroll allocation with:
-
-- Rent: 35%, external payment to recipient,
-- Emergency Fund: 20%, internal reserve,
-- Portfolio: 30%, approval-required portfolio allocation,
-- Spending: 15%, manual hold.
-
-The script asserts that:
-
-- user sees private runs, balances, receipt, and portfolio record,
-- recipient sees only their receipt,
-- employer sees only payroll notice,
-- operator sees only audit metadata,
-- other user sees nothing.
-
-## DevNet Deployment Placeholder
-
-Build output is expected at:
-
-```text
-daml/.daml/dist/preo-0.0.1.dar
+```sh
+dpm build
+dpm test
+dpm codegen-js
+dpm sandbox --json-api-port 7575
 ```
 
-Deployment metadata should be written to `daml/deployments/canton-devnet.json` after upload to Canton DevNet or the sponsor-approved environment. The backend should store the resulting package ID in `CANTON_PACKAGE_ID`.
+Smoke checks:
+
+```sh
+DEMO_MODE=true pnpm smoke:canton
+DEMO_MODE=true pnpm smoke:dynamic
+DEMO_MODE=true pnpm smoke:blink
+DEMO_MODE=true pnpm smoke:evm
+DEMO_MODE=true pnpm smoke:full-flow
+```
+
+## Demo Flow
+
+1. Open Preo.
+2. Sign in with Dynamic or use the demo identity.
+3. Create a custom payroll policy with custom categories and percentages.
+4. Simulate payroll through Dynamic Flow fallback, Blink, or direct testnet deposit.
+5. Run the payroll allocation agent.
+6. Approve the portfolio or external action.
+7. Execute the approved testnet action and show the tx hash.
+8. Switch party views: user, employer, recipient, operator, other user.
+9. Show that only the user sees full payroll allocation details.
+
+Full script: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+
+## Deployment
+
+The fastest judged deployment path is one Vercel project for the Next.js app/API:
+
+- Build command: `pnpm build`
+- Demo env: `DEMO_MODE=true`, `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`
+- Optional live env: Dynamic, Canton, Blink, settlement RPC, USDC, and vault values from `.env.example`
+
+Deployment details and placeholders for final URL/address/package IDs are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Sponsor Tracks
+
+Preo targets:
+
+- Canton Foundation: Payments & Neobanking
+- Dynamic: Best Agentic Build, Best Money App, Flow if enabled
+- Blink: consumer deposit UX, Scratch track
+
+Track mapping: [docs/SPONSOR_TRACKS.md](docs/SPONSOR_TRACKS.md).
+
+## From-Scratch Compliance
+
+Preo was built from scratch during the hackathon. xPrime was strategic inspiration only; no xPrime code, UI assets, repository history, branding, or project-specific implementation were reused. General-purpose SDKs, libraries, starter templates, official sponsor SDKs, and AI coding tools are allowed.
 
 ## Known Limitations
 
-- EVM, Dynamic Flow, Blink, and direct testnet deposits are treated as settlement evidence; Canton is the private accounting source of truth.
-- The backend is the settlement attestor for the hackathon MVP.
-- Portfolio allocation is a private testnet/simulated record, not real securities execution.
-- There are no bank rails or real-world payroll integrations in this package.
-- Category balances are represented as per-allocation deltas for speed and reliability; backend/UI clients aggregate by `categoryId` and `asset`.
+- Testnet stablecoin payroll only; no real bank direct deposit.
+- No FDIC-insured account or regulated banking service.
+- Backend attests EVM settlement evidence to Canton; this is not a trustless bridge.
+- Portfolio allocation is testnet/simulated, not real securities trading.
+- Dynamic Flow and Blink live behavior depend on sponsor enablement.
+- Demo mode returns simulated Dynamic wallet tx hashes when live wallet credentials are absent.
+
+More detail: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
