@@ -40,6 +40,7 @@ import type { BootstrapResponse, PartyViewRole } from "@preo/shared";
 
 const navItems = [
   { href: "/", label: "Overview" },
+  { href: "/onboarding", label: "Onboarding" },
   { href: "/policy", label: "Policy" },
   { href: "/fund", label: "Fund Payroll" },
   { href: "/dashboard", label: "Dashboard" },
@@ -302,6 +303,18 @@ function IdentityPanel({ identity }: { identity: Identity }) {
   );
 }
 
+function DeploymentBanner() {
+  const demoMode = process.env.DEMO_MODE === "true";
+  const livePublicEnvPresent = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || process.env.NEXT_PUBLIC_BLINK_MERCHANT_ID);
+  return (
+    <div className={`deployment-banner ${demoMode || !livePublicEnvPresent ? "demo" : "live"}`}>
+      {demoMode || !livePublicEnvPresent
+        ? "Demo mode: live sponsor credentials are not fully configured. Canton, Dynamic, and Blink live paths are ready for credentials."
+        : "Live integrations enabled."}
+    </div>
+  );
+}
+
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
@@ -326,6 +339,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           {dynamicConfigured ? <DynamicAuthWidget /> : <StatusPill tone="warn">Demo mode</StatusPill>}
         </div>
       </header>
+      <DeploymentBanner />
       {children}
     </PreoIdentityProvider>
   );
@@ -711,6 +725,7 @@ export function FundPage() {
   const [employerName, setEmployerName] = useState("Demo Employer");
   const [vaultTxHash, setVaultTxHash] = useState("");
   const [blinkRef, setBlinkRef] = useState("");
+  const [blinkDetails, setBlinkDetails] = useState<unknown>(null);
   const [latest, setLatest] = useState<unknown>(null);
 
   async function rememberCredit(result: Record<string, unknown> | undefined) {
@@ -730,6 +745,10 @@ export function FundPage() {
         <section className="panel stack">
           <h2>Dynamic Flow</h2>
           <p className="muted">Fund with Dynamic Flow when the environment is enabled. Demo mode returns a direct-deposit fallback.</p>
+          <div className="facts compact-facts">
+            <span>Status</span>
+            <strong>{identity.dynamicConfigured ? "Dynamic env present" : "Demo fallback"}</strong>
+          </div>
           <label className="field">
             <span>Amount</span>
             <input value={amountValue} onChange={(event) => setAmountValue(event.target.value)} />
@@ -741,28 +760,36 @@ export function FundPage() {
         <section className="panel stack">
           <h2>Blink deposit</h2>
           <p className="muted">Blink funds your account in one tap through the server-side signer path.</p>
+          <div className="facts compact-facts">
+            <span>Signer</span>
+            <strong>/api/blink/sign-payment</strong>
+            <span>Ref</span>
+            <strong className="code">{blinkRef || "Pending"}</strong>
+          </div>
           <button
             className="secondary"
             onClick={() =>
               run(async () => {
                 const session = await createBlinkSession(identity.dynamicUserId, amountValue);
                 setBlinkRef(String(session.externalRef ?? ""));
-                await signBlinkPayment({
+                const signed = await signBlinkPayment({
                   amount: amountValue,
                   chainId: session.chainId,
                   address: session.destinationAddress,
                   token: session.tokenAddress,
                   callbackScheme: null
                 });
-                setLatest(session);
-                return session;
+                const details = { session, signedPayloadPreview: signed.preview ?? signed };
+                setBlinkDetails(details);
+                setLatest(details);
+                return details;
               }, "Blink deposit prepared")
             }
             disabled={state.busy || !identity.signedIn}
           >
             Prepare Blink deposit
           </button>
-          <span className="code">{blinkRef || "No Blink reference yet"}</span>
+          {blinkDetails ? <JsonBlock value={blinkDetails} /> : null}
         </section>
         <section className="panel stack">
           <h2>Demo employer payroll</h2>

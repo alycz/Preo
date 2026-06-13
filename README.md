@@ -100,6 +100,29 @@ DEMO_MODE=true
 
 Live integrations can be enabled by adding Dynamic, Canton, Blink, RPC, USDC, and vault variables from `.env.example`. Do not commit private keys, even burner keys.
 
+## One-Hour Deployment Checklist
+
+1. Run local verification:
+   `pnpm install --frozen-lockfile && pnpm prisma:generate && DATABASE_URL=file:./dev.db pnpm prisma:migrate && DEMO_MODE=true pnpm verify:demo`
+2. Deploy the settlement vault:
+   `SETTLEMENT_RPC_URL=... DEPLOYER_PRIVATE_KEY=... DEPLOY_MOCK_USDC=true pnpm deploy:contracts:settlement`
+3. Upload the Daml DAR from `daml/.daml/dist/preo-0.0.1.dar` to Canton DevNet, then run:
+   `CANTON_PACKAGE_ID=... CANTON_JSON_API_URL=... pnpm update:canton-deployment`
+4. Paste only live credentials into the deploy target: Dynamic, Blink, Canton, settlement RPC, token, and vault address.
+5. Run readiness checks:
+   `pnpm smoke:live-readiness`, then the individual `pnpm smoke:*` commands.
+
+## Live Integration Status
+
+| Integration | Demo-ready | Live-ready when env is added | Check |
+| --- | --- | --- | --- |
+| Canton | yes | `CANTON_JSON_API_URL`, `CANTON_PACKAGE_ID`, optional token/parties | `/api/health/canton`, `pnpm smoke:canton` |
+| Dynamic login | yes | `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | `/api/health/dynamic` |
+| Dynamic agent wallet | yes | metadata/key shares or `DYNAMIC_AGENT_PRIVATE_KEY` | `pnpm smoke:dynamic` |
+| Dynamic Flow | fallback | `DYNAMIC_ENVIRONMENT_ID`, `DYNAMIC_AUTH_TOKEN`, `DYNAMIC_FLOW_CHECKOUT_ID` | funding page, `/api/health/dynamic` |
+| Blink | yes | `BLINK_MERCHANT_ID`, `BLINK_MERCHANT_PRIVATE_KEY` | `/api/health/blink`, `pnpm smoke:blink` |
+| EVM vault | yes | `SETTLEMENT_RPC_URL`, `TESTNET_USDC_ADDRESS`, `PREO_FUNDING_VAULT_ADDRESS` | `pnpm smoke:evm` |
+
 ## Commands
 
 ```sh
@@ -109,9 +132,12 @@ pnpm typecheck
 pnpm test
 pnpm verify:demo
 pnpm daml:test
+pnpm daml:build
 pnpm contracts:compile
 pnpm contracts:test
-pnpm contracts:deploy
+pnpm deploy:contracts:local
+pnpm deploy:contracts:settlement
+pnpm smoke:live-readiness
 ```
 
 Daml local commands:
@@ -136,6 +162,12 @@ Smoke checks:
 
 ```sh
 pnpm verify:demo
+pnpm smoke:canton
+pnpm smoke:dynamic
+pnpm smoke:blink
+pnpm smoke:evm
+pnpm smoke:full-flow
+pnpm smoke:live-readiness
 ```
 
 ## Demo Flow
@@ -157,7 +189,8 @@ Full script: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 The fastest judged deployment path is one Vercel project for the Next.js app/API:
 
 - Build command: `pnpm build`
-- Demo env: `DEMO_MODE=true`, `DATABASE_URL=file:/tmp/preo-demo.db`, `NEXT_PUBLIC_APP_URL`
+- Fast demo env: `DEMO_MODE=true`, `DATABASE_URL=file:/tmp/preo-demo.db`, `NEXT_PUBLIC_APP_URL`
+- Stable demo env: Railway/Render/Fly with persistent SQLite, or a hosted Postgres migration after the hackathon
 - Optional live env: Dynamic, Canton, Blink, settlement RPC, USDC, and vault values from `.env.example`
 
 Deployment details and placeholders for final URL/address/package IDs are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

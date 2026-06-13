@@ -1,6 +1,6 @@
 # Deployment
 
-The selected ETHGlobal submission path is a single Vercel deployment of the Next.js app/API in `DEMO_MODE=true`. Live sponsor credentials can be added later without changing the deployment shape.
+The fastest ETHGlobal submission path is a single Vercel deployment of the Next.js app/API in `DEMO_MODE=true`. For a stable judging environment, prefer Railway/Render/Fly with persistent SQLite storage, or a hosted database migration after the hackathon. Live sponsor credentials can be added later without changing the app flow.
 
 ## Submission Placeholders
 
@@ -45,6 +45,12 @@ DEMO_MODE=true
 
 For the fastest judged demo, keep optional live integration values empty. The app will show Flow fallback, demo Blink payload signing, demo Canton contract IDs, and simulated Dynamic agent tx hashes. In `DEMO_MODE=true` with `DATABASE_URL=file:/tmp/preo-demo.db`, the API lazily initializes the demo SQLite schema on first use so Vercel serverless functions have a writable database path.
 
+Database options:
+
+- Fast demo: Vercel with `DATABASE_URL=file:/tmp/preo-demo.db`; expect resets across cold starts.
+- Stable demo: Railway/Render/Fly with a persistent SQLite path.
+- Best production-style path: migrate Prisma to hosted Postgres such as Neon or Supabase after judging.
+
 ## Optional Live Integration Env
 
 Dynamic:
@@ -60,6 +66,8 @@ DYNAMIC_AGENT_WALLET_ADDRESS=
 DYNAMIC_AGENT_WALLET_METADATA_JSON=
 DYNAMIC_AGENT_KEY_SHARES_JSON=
 DYNAMIC_WALLET_BACKUP_TO_DYNAMIC=false
+DYNAMIC_AGENT_PRIVATE_KEY=
+LIVE_DYNAMIC_TX=false
 ```
 
 Canton:
@@ -73,6 +81,8 @@ CANTON_OPERATOR_PARTY=
 CANTON_EMPLOYER_PARTY=
 CANTON_RECIPIENT_PARTY=
 CANTON_OTHER_USER_PARTY=
+ALLOW_CANTON_DEMO_FALLBACK=true
+LIVE_CANTON_REQUIRED=false
 ```
 
 Blink:
@@ -82,6 +92,7 @@ BLINK_MERCHANT_ID=
 BLINK_MERCHANT_PRIVATE_KEY=
 BLINK_WEBHOOK_SECRET=
 NEXT_PUBLIC_BLINK_MERCHANT_ID=
+LIVE_BLINK_REQUIRED=false
 ```
 
 Settlement/EVM:
@@ -93,6 +104,7 @@ TESTNET_USDC_ADDRESS=
 PREO_FUNDING_VAULT_ADDRESS=
 DEPLOYER_PRIVATE_KEY=
 DEPLOY_MOCK_USDC=true
+LIVE_EVM_REQUIRED=false
 ```
 
 Do not commit private keys or live credentials.
@@ -128,6 +140,21 @@ CANTON_PACKAGE_ID=<deployed package id>
 CANTON_JSON_API_URL=<json api url>
 ```
 
+Or update the artifact directly:
+
+```sh
+CANTON_PACKAGE_ID=... CANTON_JSON_API_URL=... pnpm update:canton-deployment
+```
+
+### Canton Live Readiness
+
+Ready when `CANTON_PACKAGE_ID` and `CANTON_JSON_API_URL` are populated. If they are not populated and `DEMO_MODE=true`, the app uses the demo Canton client. Check live visibility with:
+
+```sh
+pnpm smoke:canton
+curl "$NEXT_PUBLIC_APP_URL/api/health/canton"
+```
+
 ## EVM Vault Deployment
 
 Use Node 20 or 22 for Hardhat. Node 25 can pass local tests but Hardhat warns that it is unsupported.
@@ -135,7 +162,7 @@ Use Node 20 or 22 for Hardhat. Node 25 can pass local tests but Hardhat warns th
 ```sh
 pnpm contracts:compile
 pnpm contracts:test
-SETTLEMENT_RPC_URL=... DEPLOYER_PRIVATE_KEY=... pnpm contracts:deploy
+SETTLEMENT_RPC_URL=... DEPLOYER_PRIVATE_KEY=... pnpm deploy:contracts:settlement
 ```
 
 The deploy script writes:
@@ -146,11 +173,27 @@ contracts/deployments/preo-funding-vault.json
 
 Copy the vault and token addresses into deployment env.
 
+To create a test deposit into the vault:
+
+```sh
+PREO_USER_ID=<preo-user-id> AMOUNT=25.00 DYNAMIC_AGENT_PRIVATE_KEY=... pnpm demo:direct-vault-deposit
+```
+
 ## Demo Seeding And Smoke Tests
 
 ```sh
 pnpm prisma:generate
 pnpm verify:demo
+pnpm smoke:live-readiness
+```
+
+Health endpoints:
+
+```text
+/api/health/readiness
+/api/health/canton
+/api/health/dynamic
+/api/health/blink
 ```
 
 ## Final Submission Checklist

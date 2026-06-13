@@ -84,6 +84,17 @@ export type AllocationRunResult = {
   portfolioAllocations: CantonContract[];
 };
 
+export type CantonHealth = {
+  live: boolean;
+  ok: boolean;
+  mode: "demo" | "live";
+  apiVersion: CantonJsonApiVersion;
+  packageIdPresent: boolean;
+  baseUrlPresent: boolean;
+  message: string;
+  packageStatus?: "verified" | "unverified_package_endpoint" | "missing_package_id";
+};
+
 const PREO_MODULES = {
   userProfile: "Preo.User:UserProfile",
   payrollPolicy: "Preo.Policy:PayrollPolicy",
@@ -200,6 +211,49 @@ export class CantonClient {
 
   get isLive() {
     return Boolean(this.config.baseUrl) && !this.config.demoMode;
+  }
+
+  async health(): Promise<CantonHealth> {
+    const base = {
+      live: this.isLive,
+      mode: this.isLive ? "live" : "demo",
+      apiVersion: this.config.apiVersion,
+      packageIdPresent: Boolean(this.config.packageId),
+      baseUrlPresent: Boolean(this.config.baseUrl)
+    } as const;
+
+    if (!this.isLive) {
+      return {
+        ...base,
+        ok: true,
+        message: this.config.baseUrl ? "Demo Canton client enabled by DEMO_MODE." : "Demo Canton client enabled because CANTON_JSON_API_URL is missing.",
+        packageStatus: this.config.packageId ? "unverified_package_endpoint" : "missing_package_id"
+      };
+    }
+
+    try {
+      await this.getText("/livez");
+    } catch {
+      const partyPath = this.config.apiVersion === "v1" ? "/v1/parties" : "/v2/parties";
+      await this.getText(partyPath);
+    }
+
+    let packageStatus: CantonHealth["packageStatus"] = this.config.packageId ? "unverified_package_endpoint" : "missing_package_id";
+    if (this.config.packageId) {
+      try {
+        await this.getText(`/v2/packages/${encodeURIComponent(this.config.packageId)}/status`);
+        packageStatus = "verified";
+      } catch {
+        packageStatus = "unverified_package_endpoint";
+      }
+    }
+
+    return {
+      ...base,
+      ok: true,
+      message: "Canton JSON API responded.",
+      packageStatus
+    };
   }
 
   async allocateParty(identifierHint: string, displayName = identifierHint): Promise<string> {
@@ -529,6 +583,22 @@ export class CantonClient {
       throw new Error(`Canton JSON API ${response.status}: ${text}`);
     }
     return (await response.json()) as Record<string, unknown>;
+  }
+
+  private async getText(path: string): Promise<string> {
+    const url = new URL(path, this.config.baseUrl).toString();
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...(this.config.authToken ? { authorization: `Bearer ${this.config.authToken}` } : {})
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Canton JSON API ${response.status}: ${text}`);
+    }
+    return response.text();
   }
 
   private normalizeContract<T>(contract: unknown, fallbackTemplateId: string): CantonContract<T> {
