@@ -1,0 +1,34 @@
+module Preo.Portfolio where
+
+import Preo.Types (PortfolioModel)
+
+template PortfolioAllocation
+  with
+    user : Party
+    portfolioId : Text
+    label : Text
+    amount : Decimal
+    asset : Text
+    model : PortfolioModel
+    sourceRunId : Text
+    createdAt : Time
+    archived : Bool
+  where
+    signatory user
+
+    ensure portfolioId /= "" && label /= "" && amount > 0.0 && asset /= "" && sourceRunId /= ""
+
+    nonconsuming choice RenamePortfolioAllocation : ContractId PortfolioAllocation
+      with
+        newLabel : Text
+      controller user
+      do
+        assertMsg "portfolio allocation label cannot be empty" (newLabel /= "")
+        archive self
+        create this with label = newLabel
+
+    nonconsuming choice ArchivePortfolioAllocation : ContractId PortfolioAllocation
+      controller user
+      do
+        archive self
+        create this with archived = True

@@ -1,0 +1,280 @@
+module Preo.Allocation where
+
+import qualified Preo.Payment as Payment
+import Preo.Payroll
+import Preo.Policy
+import qualified Preo.Portfolio as Portfolio
+import Preo.Types
+
+allocationAmount : Decimal -> Decimal -> Decimal
+allocationAmount payrollAmount percentageBps = payrollAmount * percentageBps / 10000.0
+
+ruleToLine : Decimal -> CategoryRule -> AllocationLine
+ruleToLine payrollAmount rule =
+  AllocationLine with
+    categoryId = rule.categoryId
+    label = rule.label
+    categoryType = rule.categoryType
+    percentageBps = rule.percentageBps
+    amount = allocationAmount payrollAmount rule.percentageBps
+    requiresApproval = rule.requiresApproval
+
+categoryActionType : CategoryType -> ActionType
+categoryActionType categoryType =
+  case categoryType of
+    ExternalPayment -> ActionExternalPayment
+    PortfolioAllocation -> ActionPortfolioAllocation
+    InternalReserve -> ActionLargeTransfer
+    ManualHold -> ActionExternalWithdrawal
+
+requiresApprovalFlag : CategoryRule -> Bool
+requiresApprovalFlag rule = rule.requiresApproval
+
+anyRequiresApproval : [CategoryRule] -> Bool
+anyRequiresApproval rules = foldl (||) False (map requiresApprovalFlag rules)
+
+forAllocationUpdate_ : [a] -> (a -> Update ()) -> Update ()
+forAllocationUpdate_ values f =
+  case values of
+    [] -> pure ()
+    value :: rest -> do
+      f value
+      forAllocationUpdate_ rest f
+
+template CategoryBalance
+  with
+    user : Party
+    categoryId : Text
+    label : Text
+    categoryType : CategoryType
+    asset : Text
+    balance : Decimal
+    sourceRunId : Text
+    updatedAt : Time
+    archived : Bool
+  where
+    signatory user
+
+    ensure categoryId /= "" && label /= "" && asset /= "" && balance >= 0.0 && sourceRunId /= ""
+
+    nonconsuming choice IncreaseBalance : ContractId CategoryBalance
+      with
+        amount : Decimal
+        updatedAtTime : Time
+      controller user
+      do
+        assertMsg "increase amount must be positive" (amount > 0.0)
+        archive self
+        create this with balance = balance + amount, updatedAt = updatedAtTime
+
+    nonconsuming choice DecreaseBalance : ContractId CategoryBalance
+      with
+        amount : Decimal
+        updatedAtTime : Time
+      controller user
+      do
+        assertMsg "decrease amount must be positive" (amount > 0.0)
+        assertMsg "decrease cannot exceed balance" (amount <= balance)
+        archive self
+        create this with balance = balance - amount, updatedAt = updatedAtTime
+
+    nonconsuming choice RenameCategory : ContractId CategoryBalance
+      with
+        newLabel : Text
+        updatedAtTime : Time
+      controller user
+      do
+        assertMsg "category label cannot be empty" (newLabel /= "")
+        archive self
+        create this with label = newLabel, updatedAt = updatedAtTime
+
+    nonconsuming choice ArchiveIfZero : ContractId CategoryBalance
+      with
+        updatedAtTime : Time
+      controller user
+      do
+        assertMsg "category balance must be zero before archive" (balance == 0.0)
+        archive self
+        create this with archived = True, updatedAt = updatedAtTime
+
+template PendingAction
+  with
+    user : Party
+    actionId : Text
+    actionType : ActionType
+    categoryId : Text
+    label : Text
+    amount : Decimal
+    asset : Text
+    recipient : Optional Party
+    externalAddress : Optional Text
+    portfolioTarget : Optional PortfolioModel
+    reason : Text
+    status : PendingActionStatus
+    createdAt : Time
+  where
+    signatory user
+
+    ensure actionId /= "" && categoryId /= "" && label /= "" && amount > 0.0 && asset /= ""
+
+    nonconsuming choice Approve : ContractId PendingAction
+      controller user
+      do
+        assertMsg "only pending actions can be approved" (status == Pending)
+        archive self
+        create this with status = Approved
+
+    nonconsuming choice Reject : ContractId PendingAction
+      controller user
+      do
+        assertMsg "only pending actions can be rejected" (status == Pending)
+        archive self
+        create this with status = Rejected
+
+    nonconsuming choice ExecuteApprovedAction : ContractId PendingAction
+      with
+        runId : Text
+        evmTxHash : Optional Text
+        executedAt : Time
+      controller user
+      do
+        assertMsg "only approved actions can be executed" (status == Approved)
+        case actionType of
+          ActionExternalPayment ->
+            case recipient of
+              Some recipientParty -> do
+                create Payment.PaymentReceipt with
+                  payer = user
+                  recipient = recipientParty
+                  amount = amount
+                  asset = asset
+                  memo = label
+                  runId = runId
+                  evmTxHash = evmTxHash
+                  createdAt = executedAt
+                  acknowledged = False
+                pure ()
+              None -> pure ()
+          ActionPortfolioAllocation ->
+            case portfolioTarget of
+              Some model -> do
+                create Portfolio.PortfolioAllocation with
+                  user = user
+                  portfolioId = categoryId
+                  label = label
+                  amount = amount
+                  asset = asset
+                  model = model
+                  sourceRunId = runId
+                  createdAt = executedAt
+                  archived = False
+                pure ()
+              None -> pure ()
+          _ -> pure ()
+        archive self
+        create this with status = Executed
+
+createArtifactsForRule : Party -> Text -> Decimal -> Text -> Time -> CategoryRule -> Update ()
+createArtifactsForRule user runId payrollAmount asset now rule = do
+  let amount = allocationAmount payrollAmount rule.percentageBps
+  create CategoryBalance with
+    user = user
+    categoryId = rule.categoryId
+    label = rule.label
+    categoryType = rule.categoryType
+    asset = asset
+    balance = amount
+    sourceRunId = runId
+    updatedAt = now
+    archived = False
+  if rule.requiresApproval
+    then do
+      create PendingAction with
+        user = user
+        actionId = runId <> ":" <> rule.categoryId
+        actionType = categoryActionType rule.categoryType
+        categoryId = rule.categoryId
+        label = rule.label
+        amount = amount
+        asset = asset
+        recipient = rule.recipient
+        externalAddress = rule.externalAddress
+        portfolioTarget = rule.portfolioTarget
+        reason = "Category requires user approval"
+        status = Pending
+        createdAt = now
+      pure ()
+    else
+      case rule.categoryType of
+        ExternalPayment ->
+          case rule.recipient of
+            Some recipientParty -> do
+              create Payment.PaymentReceipt with
+                payer = user
+                recipient = recipientParty
+                amount = amount
+                asset = asset
+                memo = rule.label
+                runId = runId
+                evmTxHash = None
+                createdAt = now
+                acknowledged = False
+              pure ()
+            None -> pure ()
+        PortfolioAllocation ->
+          case rule.portfolioTarget of
+            Some model -> do
+              create Portfolio.PortfolioAllocation with
+                user = user
+                portfolioId = rule.categoryId
+                label = rule.label
+                amount = amount
+                asset = asset
+                model = model
+                sourceRunId = runId
+                createdAt = now
+                archived = False
+              pure ()
+            None -> pure ()
+        InternalReserve -> pure ()
+        ManualHold -> pure ()
+
+template AllocationRun
+  with
+    user : Party
+    runId : Text
+    policyVersion : Int
+    payrollAmount : Decimal
+    asset : Text
+    lines : [AllocationLine]
+    status : AllocationStatus
+    createdAt : Time
+  where
+    signatory user
+
+    ensure runId /= ""
+
+    nonconsuming choice ExecuteAllocation : ContractId AllocationRun
+      with
+        policyCid : ContractId PayrollPolicy
+        creditCid : ContractId PayrollCredit
+        now : Time
+      controller user
+      do
+        policy <- fetch policyCid
+        credit <- fetch creditCid
+        assertMsg "policy belongs to another user" (policy.user == user)
+        assertMsg "payroll credit belongs to another user" (credit.user == user)
+        assertMsg "policy must be active" policy.active
+        assertMsg "payroll credit is already allocated" (not credit.allocated)
+        exercise policyCid ValidatePolicy
+        forAllocationUpdate_ policy.categories (createArtifactsForRule user runId credit.amount credit.asset now)
+        exercise creditCid MarkAllocated
+        archive self
+        create this with
+          policyVersion = policy.version
+          payrollAmount = credit.amount
+          asset = credit.asset
+          lines = map (ruleToLine credit.amount) policy.categories
+          status = if anyRequiresApproval policy.categories then AllocationPartiallyPendingApproval else AllocationExecuted
+          createdAt = now

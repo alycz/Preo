@@ -1,0 +1,24 @@
+module Preo.Payment where
+
+template PaymentReceipt
+  with
+    payer : Party
+    recipient : Party
+    amount : Decimal
+    asset : Text
+    memo : Text
+    runId : Text
+    evmTxHash : Optional Text
+    createdAt : Time
+    acknowledged : Bool
+  where
+    signatory payer
+    observer recipient
+
+    ensure amount > 0.0 && asset /= "" && runId /= ""
+
+    nonconsuming choice Acknowledge : ContractId PaymentReceipt
+      controller recipient
+      do
+        archive self
+        create this with acknowledged = True

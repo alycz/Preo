@@ -1,0 +1,70 @@
+module Preo.Types where
+
+data CategoryType
+  = InternalReserve
+  | ExternalPayment
+  | PortfolioAllocation
+  | ManualHold
+  deriving (Eq, Show)
+
+data ActionType
+  = ActionExternalPayment
+  | ActionPortfolioAllocation
+  | ActionExternalWithdrawal
+  | ActionPolicyChange
+  | ActionNewRecipient
+  | ActionLargeTransfer
+  deriving (Eq, Show)
+
+data AllocationStatus
+  = AllocationPending
+  | AllocationExecuted
+  | AllocationPartiallyPendingApproval
+  | AllocationCancelled
+  deriving (Eq, Show)
+
+data PendingActionStatus
+  = Pending
+  | Approved
+  | Rejected
+  | Executed
+  deriving (Eq, Show)
+
+data PortfolioModel
+  = GlobalEquityBasket
+  | TreasuryYield
+  | USDCSavings
+  | CustomPortfolio Text
+  deriving (Eq, Show)
+
+data CategoryRule = CategoryRule
+  with
+    categoryId : Text
+    label : Text
+    percentageBps : Decimal
+    categoryType : CategoryType
+    recipient : Optional Party
+    externalAddress : Optional Text
+    portfolioTarget : Optional PortfolioModel
+    requiresApproval : Bool
+  deriving (Eq, Show)
+
+data ApprovalRule = ApprovalRule
+  with
+    ruleId : Text
+    actionType : ActionType
+    enabled : Bool
+    thresholdAmount : Optional Decimal
+    appliesToCategoryId : Optional Text
+    description : Text
+  deriving (Eq, Show)
+
+data AllocationLine = AllocationLine
+  with
+    categoryId : Text
+    label : Text
+    categoryType : CategoryType
+    percentageBps : Decimal
+    amount : Decimal
+    requiresApproval : Bool
+  deriving (Eq, Show)

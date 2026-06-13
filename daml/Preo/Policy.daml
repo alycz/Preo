@@ -1,0 +1,86 @@
+module Preo.Policy where
+
+import Preo.Types
+
+hasOptional : Optional a -> Bool
+hasOptional optional =
+  case optional of
+    Some _ -> True
+    None -> False
+
+categoryBps : CategoryRule -> Decimal
+categoryBps category = category.percentageBps
+
+forUpdate_ : [a] -> (a -> Update ()) -> Update ()
+forUpdate_ values f =
+  case values of
+    [] -> pure ()
+    value :: rest -> do
+      f value
+      forUpdate_ rest f
+
+validateCategory : CategoryRule -> Update ()
+validateCategory category = do
+  assertMsg "categoryId cannot be empty" (category.categoryId /= "")
+  assertMsg "category label cannot be empty" (category.label /= "")
+  assertMsg "category percentage cannot be negative" (category.percentageBps >= 0.0)
+  case category.categoryType of
+    ExternalPayment -> assertMsg "external payment requires recipient or external address" (hasOptional category.recipient || hasOptional category.externalAddress)
+    PortfolioAllocation -> assertMsg "portfolio allocation requires portfolio target" (hasOptional category.portfolioTarget)
+    InternalReserve -> pure ()
+    ManualHold -> pure ()
+
+validatePolicyCategories : [CategoryRule] -> Update ()
+validatePolicyCategories categories = do
+  assertMsg "category list cannot be empty" (not (null categories))
+  forUpdate_ categories validateCategory
+  let totalBps = foldl (+) 0.0 (map categoryBps categories)
+  assertMsg "category percentages must sum to 10000 bps" (totalBps == 10000.0)
+
+template PayrollPolicy
+  with
+    user : Party
+    policyName : Text
+    categories : [CategoryRule]
+    approvalRules : [ApprovalRule]
+    version : Int
+    active : Bool
+    createdAt : Time
+    updatedAt : Time
+  where
+    signatory user
+
+    ensure policyName /= ""
+
+    nonconsuming choice ValidatePolicy : ()
+      controller user
+      do
+        assertMsg "policy name cannot be empty" (policyName /= "")
+        validatePolicyCategories categories
+
+    nonconsuming choice UpdatePolicy : ContractId PayrollPolicy
+      with
+        newPolicyName : Text
+        newCategories : [CategoryRule]
+        newApprovalRules : [ApprovalRule]
+        updatedAtTime : Time
+      controller user
+      do
+        assertMsg "policy name cannot be empty" (newPolicyName /= "")
+        validatePolicyCategories newCategories
+        archive self
+        create this with
+          policyName = newPolicyName
+          categories = newCategories
+          approvalRules = newApprovalRules
+          version = version + 1
+          active = True
+          updatedAt = updatedAtTime
+
+    nonconsuming choice DeactivatePolicy : ContractId PayrollPolicy
+      with
+        updatedAtTime : Time
+      controller user
+      do
+        archive self
+        create this with active = False, updatedAt = updatedAtTime
