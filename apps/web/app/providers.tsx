@@ -1,24 +1,25 @@
 "use client";
 
-import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
-import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
-import { getDynamicEnvironmentId } from "@/lib/dynamic-env";
+import dynamic from "next/dynamic";
+import { AppWalletProvider } from "./wallet-context";
+import type { ClientWalletMode } from "@/lib/dynamic-env";
 
-export function DynamicProvider({ children }: { children: React.ReactNode }) {
-  const environmentId = getDynamicEnvironmentId();
+const LiveDynamicProvider = dynamic(() => import("./providers-live").then((mod) => mod.LiveDynamicProvider), {
+  ssr: false
+});
 
-  if (!environmentId) {
-    return <>{children}</>;
+type AppProvidersProps = {
+  children: React.ReactNode;
+  dynamicEnvironmentId?: string;
+  walletMode: ClientWalletMode;
+};
+
+export function AppProviders({ children, dynamicEnvironmentId, walletMode }: AppProvidersProps) {
+  const content = <AppWalletProvider mode={walletMode}>{children}</AppWalletProvider>;
+
+  if (walletMode !== "live" || !dynamicEnvironmentId) {
+    return content;
   }
 
-  return (
-    <DynamicContextProvider
-      settings={{
-        environmentId,
-        walletConnectors: [EthereumWalletConnectors]
-      }}
-    >
-      {children}
-    </DynamicContextProvider>
-  );
+  return <LiveDynamicProvider environmentId={dynamicEnvironmentId}>{content}</LiveDynamicProvider>;
 }
