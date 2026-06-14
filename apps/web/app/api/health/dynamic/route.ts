@@ -28,7 +28,8 @@ export async function GET() {
   return ok({
     clientWalletMode: getHealthClientWalletMode(env),
     dynamicPublicEnvPresent: Boolean(env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID),
-    dynamicServerEnvPresent: Boolean(env.DYNAMIC_ENVIRONMENT_ID && env.DYNAMIC_AUTH_TOKEN),
+    dynamicServerEnvPresent: Boolean(env.DYNAMIC_ENVIRONMENT_ID),
+    dynamicAuthTokenPresent: Boolean(env.DYNAMIC_AUTH_TOKEN),
     flowCheckoutIdPresent: Boolean(env.DYNAMIC_FLOW_CHECKOUT_ID),
     flowUsable: flowAvailability.available,
     flowAvailability,

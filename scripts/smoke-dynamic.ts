@@ -7,9 +7,7 @@ if (!flow.available) {
   const missingFlowEnv =
     flow.reason === "missing_environment_id"
       ? "DYNAMIC_ENVIRONMENT_ID or NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID"
-      : flow.reason === "missing_auth_token"
-        ? "DYNAMIC_AUTH_TOKEN"
-        : "DYNAMIC_FLOW_CHECKOUT_ID";
+      : "DYNAMIC_FLOW_CHECKOUT_ID";
   console.log(`LIVE_DISABLED: missing env var ${missingFlowEnv}; demo fallback passed`);
 } else {
   console.log(`Dynamic Flow configured with checkout ${flow.checkoutId}`);
