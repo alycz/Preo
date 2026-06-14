@@ -5,7 +5,7 @@ import { BlinkDepositButton, useBlinkDeposit } from "@swype-org/deposit/react";
 import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   approveAction,
   bootstrapMe,
@@ -38,20 +38,26 @@ import {
   type PortfolioModel
 } from "@/lib/api";
 import type { BootstrapResponse, PartyViewRole } from "@preo/shared";
+import { MotionConfig } from "motion/react";
+import { AccordionRoot, AccordionItem, AccordionTrigger, AccordionContent } from "./primitives/accordion";
+import { TabsRoot, TabsList, TabTrigger } from "./primitives/tabs";
+import { Switch } from "./primitives/switch";
+import { Menu, MenuTrigger, MenuContent, MenuItem, MenuLabel, MenuSeparator } from "./primitives/dropdown-menu";
+import { DialogRoot, DialogTrigger, DialogClose, DialogContent } from "./primitives/dialog";
+import { TooltipProvider, Hint } from "./primitives/tooltip";
+import { Select, SelectOption } from "./primitives/select";
 
 const navItems = [
-  { href: "/", label: "Overview" },
-  { href: "/onboarding", label: "Onboarding" },
   { href: "/policy", label: "Policy" },
-  { href: "/fund", label: "Fund Payroll" },
+  { href: "/payroll", label: "Payroll" },
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/approvals", label: "Approvals" },
+  { href: "/approvals", label: "Agent" },
   { href: "/portfolio", label: "Portfolio" },
-  { href: "/privacy-demo", label: "Privacy Demo" }
+  { href: "/privacy-demo", label: "Privacy" }
 ];
 
 const exampleCategories: PolicyCategory[] = [
-  { categoryId: "rent", label: "Rent", percentageBps: 3500, categoryType: "ExternalPayment", recipientParty: "preo-demo-recipient", requiresApproval: false },
+  { categoryId: "rent", label: "Rent", percentageBps: 3500, categoryType: "ExternalPayment", recipientParty: "preo-recipient", requiresApproval: false },
   { categoryId: "reserve", label: "Emergency Fund", percentageBps: 2500, categoryType: "InternalReserve", requiresApproval: false },
   { categoryId: "portfolio", label: "Portfolio", percentageBps: 2500, categoryType: "PortfolioAllocation", portfolioTarget: "GlobalEquityBasket", requiresApproval: true },
   { categoryId: "spending", label: "Spending", percentageBps: 1500, categoryType: "ManualHold", requiresApproval: false }
@@ -255,8 +261,160 @@ function PageHeader({ eyebrow, title, children, actions }: { eyebrow: string; ti
   );
 }
 
-function JsonBlock({ value }: { value: unknown }) {
-  return <pre className="code compact">{JSON.stringify(value, null, 2)}</pre>;
+function JsonBlock({ value, label = "Technical detail" }: { value: unknown; label?: string }) {
+  return (
+    <AccordionRoot type="single" collapsible className="disclosure">
+      <AccordionItem value="detail">
+        <AccordionTrigger>{label}</AccordionTrigger>
+        <AccordionContent>
+          <pre className="code compact">{JSON.stringify(value, null, 2)}</pre>
+        </AccordionContent>
+      </AccordionItem>
+    </AccordionRoot>
+  );
+}
+
+function BrandMark({ ariaLabel = "Preo home" }: { ariaLabel?: string }) {
+  return (
+    <Link href="/" className="brand-mark" aria-label={ariaLabel}>
+      <span className="brand-text">
+        <span>Preo</span>
+      </span>
+    </Link>
+  );
+}
+
+const marketingNav = [
+  { href: "#how", label: "How it works" },
+  { href: "#privacy", label: "Privacy" },
+  { href: "#built", label: "Infrastructure" }
+];
+
+function MarketingHeader({ dynamicConfigured }: { dynamicConfigured: boolean }) {
+  return (
+    <header className="app-shell marketing">
+      <BrandMark />
+      <nav className="marketing-nav">
+        {marketingNav.map((item) => (
+          <a key={item.href} href={item.href}>
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      <div className="shell-actions">
+        <Link className="button" href="/onboarding">
+          Open app
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+function AppHeader({ pathname }: { pathname: string; dynamicConfigured: boolean }) {
+  return (
+    <header className="app-shell">
+      <BrandMark ariaLabel="Preo home" />
+      <nav>
+        {navItems.map((item) => (
+          <Link key={item.href} className={pathname === item.href ? "active" : ""} href={item.href}>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="shell-actions">
+        {pathname === "/onboarding" ? null : (
+          <Link className="button" href="/onboarding">
+            Onboard
+          </Link>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function shortAddress(address?: string) {
+  if (!address) {
+    return null;
+  }
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function ProfileMenu({ identity, dynamicConfigured }: { identity: Identity; dynamicConfigured: boolean }) {
+  const address = shortAddress(identity.walletAddress);
+  const label = address ?? (identity.signedIn ? "Account" : "Connect");
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <button className="profile-trigger" aria-label="Account menu">
+          <span className="profile-avatar" aria-hidden>
+            {identity.signedIn ? "P" : "·"}
+          </span>
+          <span>{label}</span>
+        </button>
+      </MenuTrigger>
+      <MenuContent>
+        <MenuLabel>Account</MenuLabel>
+        <div className="menu-meta">
+          <span>Status</span>
+          <strong className={identity.signedIn ? "ok-text" : "muted"}>{identity.signedIn ? "Connected" : "Not connected"}</strong>
+          <span>Wallet</span>
+          <strong className="code">{identity.walletAddress ?? "—"}</strong>
+        </div>
+        <MenuSeparator />
+        <MenuItem asChild>
+          <Link href="/demo">Quickstart</Link>
+        </MenuItem>
+        <MenuItem asChild>
+          <Link href="/onboarding">Account setup</Link>
+        </MenuItem>
+        {dynamicConfigured ? (
+          <div className="menu-auth">
+            <DynamicAuthWidget />
+          </div>
+        ) : null}
+      </MenuContent>
+    </Menu>
+  );
+}
+
+function SiteFooter() {
+  return (
+    <footer className="site-footer">
+      <div className="footer-inner">
+        <div className="footer-grid">
+          <div className="footer-brand">
+            <BrandMark />
+            <p>Receive stablecoin payroll and route it into private, user-defined categories — automatically.</p>
+          </div>
+          <div className="footer-col">
+            <h4>Product</h4>
+            <Link href="/policy">Payroll policy</Link>
+            <Link href="/payroll">Payroll</Link>
+            <Link href="/dashboard">Dashboard</Link>
+            <Link href="/portfolio">Portfolio</Link>
+          </div>
+          <div className="footer-col">
+            <h4>Privacy</h4>
+            <Link href="/privacy-demo">Privacy</Link>
+            <Link href="/approvals">Approvals</Link>
+            <a href="/#how">How it works</a>
+          </div>
+          <div className="footer-col">
+            <h4>Built with</h4>
+            <span className="muted">Canton</span>
+            <span className="muted">Dynamic</span>
+            <span className="muted">Blink</span>
+          </div>
+        </div>
+        <div className="footer-base">
+          <span>© 2026 Preo · Private payroll neobank</span>
+          <span className="footer-disclaimer">
+            Preo is a prototype. It is not a bank, holds no real funds, and is not FDIC-insured.
+          </span>
+        </div>
+      </div>
+    </footer>
+  );
 }
 
 function ContractTable({ contracts, empty = "No visible contracts." }: { contracts: ContractSnapshot[]; empty?: string }) {
@@ -287,54 +445,704 @@ function ContractTable({ contracts, empty = "No visible contracts." }: { contrac
   );
 }
 
-function IdentityPanel({ identity }: { identity: Identity }) {
-  return (
-    <div className="identity-panel">
-      <StatusPill tone={identity.signedIn ? "ok" : "warn"}>{identity.dynamicConfigured ? (identity.signedIn ? "Dynamic connected" : "Dynamic sign-in required") : "Demo auth"}</StatusPill>
-      <span className="code">{identity.dynamicUserId}</span>
-    </div>
-  );
-}
-
-function DeploymentBanner() {
-  const demoMode = process.env.DEMO_MODE === "true";
-  const livePublicEnvPresent = Boolean(isDynamicEnvironmentConfigured() || process.env.NEXT_PUBLIC_BLINK_MERCHANT_ID);
-  return (
-    <div className={`deployment-banner ${demoMode || !livePublicEnvPresent ? "demo" : "live"}`}>
-      {demoMode || !livePublicEnvPresent
-        ? "Demo mode: live sponsor credentials are not fully configured. Canton, Dynamic, and Blink live paths are ready for credentials."
-        : "Live integrations enabled."}
-    </div>
-  );
-}
-
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const dynamicConfigured = isDynamicEnvironmentConfigured();
+  const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+  const isMarketing = pathname === "/";
   return (
-    <PreoIdentityProvider>
-      <header className="app-shell">
-        <Link href="/" className="brand-mark" aria-label="Preo overview">
-          <span>Preo</span>
-          <small>Private payroll neobank</small>
-        </Link>
-        <nav>
-          {navItems.map((item) => (
-            <Link key={item.href} className={pathname === item.href ? "active" : ""} href={item.href}>
-              {item.label}
-            </Link>
+    <MotionConfig reducedMotion="user">
+      <TooltipProvider>
+        <PreoIdentityProvider>
+          {isMarketing ? (
+            <MarketingHeader dynamicConfigured={dynamicConfigured} />
+          ) : (
+            <AppHeader pathname={pathname} dynamicConfigured={dynamicConfigured} />
+          )}
+          {children}
+          {isMarketing ? <SiteFooter /> : null}
+        </PreoIdentityProvider>
+      </TooltipProvider>
+    </MotionConfig>
+  );
+}
+
+const HERO_SALARY = 2500;
+
+const privacyProblems = [
+  {
+    title: "Your employer sees everything",
+    body: "Traditional payroll routes through whoever signs your check. Your raises, your savings, the accounts your money touches — all visible upstream."
+  },
+  {
+    title: "Your bank sees your strategy",
+    body: "Move money to invest and a custodian logs it. Your allocation becomes someone else's data to mine, sell, or leak."
+  },
+  {
+    title: "You trust a black box",
+    body: "You're told your money is private. You can't verify it. Privacy becomes a line in a terms-of-service page instead of a property of the system."
+  }
+];
+
+const privacyFeatures = [
+  {
+    title: "Salary is a private contract",
+    body: "Each paycheck is a Canton contract only you and your agent can read. Your employer gets a receipt, never the breakdown.",
+    chip: "Canton",
+    id: "Private ledger"
+  },
+  {
+    title: "You approve sensitive moves",
+    body: "New recipients, large transfers, and investments pause for your signature before the agent acts on them.",
+    chip: "Policy",
+    id: "On-chain rules"
+  },
+  {
+    title: "Verify without exposing",
+    body: "Every party sees only the contracts they're a stakeholder in. Anyone can verify the system; no one can see your slice.",
+    chip: "Proof",
+    id: "Zero-leak"
+  }
+];
+
+const howItWorks = [
+  {
+    title: "Onboard via Dynamic and Blink",
+    body: "Sign in with Dynamic to create your identity, then activate your Blink payment rail to receive stablecoin payroll."
+  },
+  {
+    title: "Get paid in stablecoins",
+    body: "Your employer sends USDC payroll into your private Preo account. No intermediary sees the amount."
+  },
+  {
+    title: "Set your split once",
+    body: "Define categories — rent, savings, investing — as percentages that always add up to 100%."
+  },
+  {
+    title: "The agent allocates each paycheck",
+    body: "On every deposit it routes funds by your policy and pauses for approval before anything sensitive."
+  },
+  {
+    title: "Balances stay private on Canton",
+    body: "Employers, recipients, and other users each see only their slice. No one ever sees the whole."
+  }
+];
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
+function useCountUp(target: number, run: boolean, durationMs: number, restartKey: number) {
+  const [value, setValue] = useState(0);
+  const raf = useRef(0);
+  useEffect(() => {
+    if (!run) {
+      setValue(0);
+      return;
+    }
+    let startTs = 0;
+    const tick = (now: number) => {
+      if (!startTs) {
+        startTs = now;
+      }
+      const t = Math.min(1, (now - startTs) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(target * eased);
+      if (t < 1) {
+        raf.current = requestAnimationFrame(tick);
+      }
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [run, target, durationMs, restartKey]);
+  return value;
+}
+
+// ---- Simulated demo data (no live backend in the demo) ----
+
+const SIM_CATEGORIES = [
+  { id: "rent", label: "Rent", type: "External payment", balance: 875 },
+  { id: "reserve", label: "Emergency Fund", type: "Internal reserve", balance: 625 },
+  { id: "portfolio", label: "Portfolio", type: "Portfolio allocation", balance: 625 },
+  { id: "spending", label: "Spending", type: "Manual hold", balance: 375 }
+];
+
+const SIM_RUNS = [
+  { runId: "run-1042", amount: 2500, categories: 4, when: "2h ago", status: "Settled" },
+  { runId: "run-1041", amount: 2500, categories: 4, when: "2 weeks ago", status: "Settled" },
+  { runId: "run-1040", amount: 2500, categories: 4, when: "4 weeks ago", status: "Settled" }
+];
+
+const SIM_ACTIVITY: { area: string; label: string; detail: string; when: string; status: string; tone: "ok" | "neutral" | "warn" }[] = [
+  { area: "Policy", label: "Policy saved", detail: "June payroll policy · 4 categories", when: "2h ago", status: "Saved", tone: "ok" },
+  { area: "Agent", label: "Allocation run #1042", detail: "2,500 USDC split across 4 categories", when: "2h ago", status: "Settled", tone: "ok" },
+  { area: "Portfolio", label: "Portfolio allocation", detail: "625 USDC → Global Equity Basket", when: "2h ago", status: "Allocated", tone: "neutral" },
+  { area: "Privacy", label: "Privacy view", detail: "Employer perspective resolved to receipt-only", when: "1d ago", status: "Viewed", tone: "neutral" },
+  { area: "Agent", label: "Approval cleared", detail: "Portfolio allocation approved by policy", when: "1d ago", status: "Approved", tone: "ok" }
+];
+
+const SIM_PORTFOLIO = [
+  { id: "alloc-1", label: "Global Equity Basket", model: "Global Equity Basket", amount: 625, runId: "run-1042" },
+  { id: "alloc-2", label: "Treasury Yield", model: "Treasury Yield", amount: 250, runId: "run-1041" },
+  { id: "alloc-3", label: "USDC Savings", model: "USDC Savings", amount: 200, runId: "run-1040" }
+];
+
+const SIM_PARTY_VIEW: Record<PartyViewRole, { partyId: string; explanation: string; contracts: { template: string; contractId: string; detail: string }[] }> = {
+  user: {
+    partyId: "preo::user-7f3a9c",
+    explanation: "You and your agent see the full private ledger — every credit, balance, and allocation.",
+    contracts: [
+      { template: "PayrollCredit", contractId: "00a1…7f3a", detail: "2,500.00 USDC salary credit" },
+      { template: "CategoryBalance", contractId: "00b2…1c4d", detail: "Rent · 875.00 USDC" },
+      { template: "CategoryBalance", contractId: "00b3…9e2f", detail: "Emergency Fund · 625.00 USDC" },
+      { template: "PortfolioAllocation", contractId: "00c4…5a8b", detail: "625.00 USDC · Global Equity Basket" },
+      { template: "AllocationRun", contractId: "00d5…3b7c", detail: "run-1042 · 4 categories" }
+    ]
+  },
+  employer: {
+    partyId: "acme-corp::payroll",
+    explanation: "The employer sees only a payment receipt confirming payroll was delivered — never the breakdown.",
+    contracts: [{ template: "EmployerPayrollNotice", contractId: "00e6…2f9a", detail: "Payroll delivered · 2,500.00 USDC" }]
+  },
+  recipient: {
+    partyId: "landlord::rent-7c",
+    explanation: "A recipient sees only the single payment addressed to them.",
+    contracts: [{ template: "PaymentReceipt", contractId: "00f7…8d1e", detail: "Received 875.00 USDC" }]
+  },
+  operator: {
+    partyId: "preo::operator",
+    explanation: "The operator sees audit metadata only — no balances, amounts, or policy detail.",
+    contracts: [{ template: "OperatorAuditEvent", contractId: "0108…4c6a", detail: "Allocation run executed · metadata only" }]
+  },
+  "other-user": {
+    partyId: "preo::user-91c2e0",
+    explanation: "A different Preo user sees nothing about this payroll. Privacy holds by construction.",
+    contracts: []
+  }
+};
+
+function ActivityFeed({ items }: { items: typeof SIM_ACTIVITY }) {
+  return (
+    <ul className="activity-feed">
+      {items.map((item, index) => (
+        <li className="activity-row" key={index}>
+          <span className="activity-area">{item.area}</span>
+          <div className="activity-main">
+            <strong>{item.label}</strong>
+            <span className="activity-detail">{item.detail}</span>
+          </div>
+          <span className="activity-when">{item.when}</span>
+          <StatusPill tone={item.tone}>{item.status}</StatusPill>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ---- User flow (sticky scroll-telling) ----
+
+const FLOW_STEPS = howItWorks;
+
+export function UserFlowSection() {
+  const reduced = usePrefersReducedMotion();
+  const [active, setActive] = useState(0);
+  const panelRefs = useRef<(HTMLElement | null)[]>([]);
+
+  useEffect(() => {
+    if (reduced) {
+      return;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const nodes = panelRefs.current.filter(Boolean) as HTMLElement[];
+    if (!nodes.length) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let best: IntersectionObserverEntry | null = null;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            continue;
+          }
+          if (!best || entry.intersectionRatio > best.intersectionRatio) {
+            best = entry;
+          }
+        }
+        if (best) {
+          const index = nodes.indexOf(best.target as HTMLElement);
+          if (index !== -1) {
+            setActive(index);
+          }
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
+    );
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [reduced]);
+
+  const scrollTo = useCallback(
+    (index: number) => {
+      panelRefs.current[index]?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+    },
+    [reduced]
+  );
+
+  return (
+    <section className={`userflow ${reduced ? "is-static" : ""}`} id="how" aria-label="How a paycheck flows through Preo">
+      <div className="rows-head userflow-head">
+        <h2>One policy. Every paycheck allocated, privately.</h2>
+        <p>Set your split once. The agent allocates each paycheck, then every balance stays private on Canton.</p>
+      </div>
+      <div className="userflow-body">
+        <aside className="userflow-rail">
+          <ol className="userflow-steps">
+            {FLOW_STEPS.map((step, index) => (
+              <li key={step.title}>
+                <button
+                  type="button"
+                  className={`userflow-step ${index === active ? "active" : ""}`}
+                  onClick={() => scrollTo(index)}
+                  aria-current={index === active ? "step" : undefined}
+                >
+                  <span className="userflow-tick" aria-hidden />
+                  <span className="userflow-num">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="userflow-title">{step.title}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </aside>
+        <div className="userflow-panels">
+          {FLOW_STEPS.map((step, index) => (
+            <article
+              key={step.title}
+              ref={(el) => {
+                panelRefs.current[index] = el;
+              }}
+              className={`userflow-panel ${index === active ? "active" : ""}`}
+            >
+              <span className="userflow-panel-num">{String(index + 1).padStart(2, "0")}</span>
+              <h3 className="userflow-panel-title">{step.title}</h3>
+              <p className="userflow-panel-body">{step.body}</p>
+              <FlowVisual step={index} />
+            </article>
           ))}
-        </nav>
-        <div className="shell-actions">
-          <Link className="demo-link" href="/demo">
-            Demo
-          </Link>
-          {dynamicConfigured ? <DynamicAuthWidget /> : <StatusPill tone="warn">Demo mode</StatusPill>}
         </div>
-      </header>
-      <DeploymentBanner />
-      {children}
-    </PreoIdentityProvider>
+      </div>
+    </section>
+  );
+}
+
+function FlowVisual({ step }: { step: number }) {
+  if (step === 0) {
+    return (
+      <div className="ledger userflow-card">
+        <div className="ledger-head">
+          <div>
+            <span className="ledger-label">Onboarding</span>
+            <strong className="ledger-total">Ready</strong>
+          </div>
+          <StatusPill tone="ok">Connected</StatusPill>
+        </div>
+        <div className="ledger-rows">
+          <div className="ledger-row">
+            <span>Dynamic identity</span>
+            <span className="num">Verified</span>
+          </div>
+          <div className="ledger-row">
+            <span>Blink payment rail</span>
+            <span className="num">Active</span>
+          </div>
+          <div className="ledger-row">
+            <span>Wallet address</span>
+            <span className="num">0x···4f2a</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (step === 1) {
+    return (
+      <div className="ledger userflow-card">
+        <div className="ledger-head">
+          <div>
+            <span className="ledger-label">Incoming salary</span>
+            <strong className="ledger-total">
+              {amount(HERO_SALARY)}
+              <em>USDC</em>
+            </strong>
+          </div>
+          <StatusPill tone="ok">Private</StatusPill>
+        </div>
+        <div className="ledger-foot">
+          <span>Source</span>
+          <span>Employer · USDC</span>
+        </div>
+      </div>
+    );
+  }
+  if (step === 2) {
+    return (
+      <div className="ledger userflow-card">
+        <div className="ledger-head">
+          <div>
+            <span className="ledger-label">Your split</span>
+            <strong className="ledger-total">
+              100<em>%</em>
+            </strong>
+          </div>
+          <StatusPill>Set once</StatusPill>
+        </div>
+        <div className="ledger-rows">
+          {exampleCategories.map((category) => (
+            <div className="ledger-row" key={category.categoryId}>
+              <span>{category.label}</span>
+              <span className="num">{bps(category.percentageBps)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (step === 3) {
+    return (
+      <div className="ledger userflow-card">
+        <div className="ledger-head">
+          <div>
+            <span className="ledger-label">Agent allocation</span>
+            <strong className="ledger-total">
+              {amount(HERO_SALARY)}
+              <em>USDC</em>
+            </strong>
+          </div>
+          <StatusPill tone="ok">Allocated</StatusPill>
+        </div>
+        <div className="ledger-rows">
+          {exampleCategories.map((category) => (
+            <div className="ledger-row" key={category.categoryId}>
+              <span>{category.label}</span>
+              <span className="num">{amount((HERO_SALARY * category.percentageBps) / 10000)} USDC</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="ledger userflow-card">
+      <div className="ledger-head">
+        <div>
+          <span className="ledger-label">Visibility on Canton</span>
+          <strong className="ledger-total">Private</strong>
+        </div>
+        <StatusPill tone="ok">Zero-leak</StatusPill>
+      </div>
+      <div className="ledger-rows">
+        <div className="ledger-row">
+          <span>You + your agent</span>
+          <span className="num">Full ledger</span>
+        </div>
+        <div className="ledger-row">
+          <span>Employer</span>
+          <span className="num userflow-hidden">Receipt only</span>
+        </div>
+        <div className="ledger-row">
+          <span>Landlord / recipient</span>
+          <span className="num userflow-hidden">Their payment</span>
+        </div>
+        <div className="ledger-row">
+          <span>Everyone else</span>
+          <span className="num userflow-hidden">Nothing</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Agentic allocation (configurable, looping animated flow) ----
+
+type AllocPhase = "arrive" | "think" | "split" | "distribute" | "done";
+const ALLOC_PHASE_MS: Record<AllocPhase, number> = {
+  arrive: 1800,
+  think: 1800,
+  split: 2300,
+  distribute: 2600,
+  done: 1500
+};
+const ALLOC_NEXT: Record<AllocPhase, AllocPhase> = {
+  arrive: "think",
+  think: "split",
+  split: "distribute",
+  distribute: "done",
+  done: "arrive"
+};
+
+type CapKey = "rent" | "reserve" | "portfolio" | "spending";
+type SubKind = "bill" | "limit" | "hold" | "invest";
+type SubItem = { id: string; label: string; weight: number; kind: SubKind };
+type Tier = { id: string; label: string; capKey: CapKey; subs: SubItem[] };
+
+const SUB_STATUS: Record<SubKind, string> = {
+  bill: "Paid",
+  limit: "Spend up to",
+  hold: "Reserved",
+  invest: "Allocated"
+};
+
+const ALLOC_TIERS: Tier[] = [
+  {
+    id: "rent",
+    label: "Rent",
+    capKey: "rent",
+    subs: [
+      { id: "lease", label: "Lease · 1200 Market St", weight: 0.91, kind: "bill" },
+      { id: "renters-insurance", label: "Renters insurance", weight: 0.09, kind: "bill" }
+    ]
+  },
+  {
+    id: "reserve",
+    label: "Emergency Fund",
+    capKey: "reserve",
+    subs: [{ id: "safety-reserve", label: "3-month safety reserve", weight: 1, kind: "hold" }]
+  },
+  {
+    id: "portfolio",
+    label: "Portfolio",
+    capKey: "portfolio",
+    subs: [
+      { id: "equity-basket", label: "Global Equity Basket", weight: 0.7, kind: "invest" },
+      { id: "stablecoin-yield", label: "Stablecoin yield", weight: 0.3, kind: "invest" }
+    ]
+  },
+  {
+    id: "spending",
+    label: "Spending",
+    capKey: "spending",
+    subs: [
+      { id: "groceries", label: "Groceries", weight: 0.48, kind: "limit" },
+      { id: "dining", label: "Dining", weight: 0.25, kind: "limit" },
+      { id: "transit", label: "Transit", weight: 0.16, kind: "limit" },
+      { id: "subscriptions", label: "Subscriptions", weight: 0.11, kind: "bill" }
+    ]
+  }
+];
+
+const DEFAULT_CAPS: Record<CapKey, number> = { rent: 875, reserve: 625, portfolio: 625, spending: 375 };
+
+const CAP_FIELDS: { key: CapKey; label: string }[] = [
+  { key: "rent", label: "Rent" },
+  { key: "reserve", label: "Emergency Fund" },
+  { key: "portfolio", label: "Portfolio" },
+  { key: "spending", label: "Spending" }
+];
+
+export function AgenticAllocation() {
+  const reduced = usePrefersReducedMotion();
+  const [mode, setMode] = useState<"config" | "run">("config");
+  const [caps, setCaps] = useState<Record<CapKey, number>>(DEFAULT_CAPS);
+  const [capInputs, setCapInputs] = useState<Record<CapKey, string>>(() => ({
+    rent: String(DEFAULT_CAPS.rent),
+    reserve: String(DEFAULT_CAPS.reserve),
+    portfolio: String(DEFAULT_CAPS.portfolio),
+    spending: String(DEFAULT_CAPS.spending)
+  }));
+  const [phase, setPhase] = useState<AllocPhase>("arrive");
+  const [loop, setLoop] = useState(0);
+
+  const total = CAP_FIELDS.reduce((sum, field) => sum + (caps[field.key] || 0), 0);
+
+  useEffect(() => {
+    if (mode !== "run") {
+      return;
+    }
+    if (reduced) {
+      setPhase("done");
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    let current: AllocPhase = "arrive";
+    setPhase(current);
+    const advance = () => {
+      timer = setTimeout(() => {
+        const next = ALLOC_NEXT[current];
+        if (next === "arrive") {
+          setLoop((value) => value + 1);
+        }
+        current = next;
+        setPhase(current);
+        advance();
+      }, ALLOC_PHASE_MS[current]);
+    };
+    advance();
+    return () => clearTimeout(timer);
+  }, [reduced, mode]);
+
+  const updateCap = (key: CapKey, raw: string) => {
+    setCapInputs((current) => ({ ...current, [key]: raw }));
+    setCaps((current) => ({ ...current, [key]: Math.max(0, Number(raw || 0)) }));
+  };
+
+  const run = () => {
+    setLoop((value) => value + 1);
+    setPhase("arrive");
+    setMode("run");
+  };
+
+  const splitting = phase === "split" || phase === "distribute" || phase === "done";
+  const distributing = phase === "distribute" || phase === "done";
+
+  return (
+    <div
+      className={`agentic phase-${phase} mode-${mode} ${reduced ? "is-static" : ""}`}
+      aria-label="Agent accepting a paycheck and splitting it across categories and granular limits"
+    >
+      <div className="agentic-source agentic-node">
+        {mode === "config" ? (
+          <div className="agentic-config">
+            <span className="agentic-node-label">Configure Paycheck Allocations</span>
+            <div className="agentic-config-fields">
+              {CAP_FIELDS.map((field) => (
+                <label key={field.key} className="agentic-config-field">
+                  <span>{field.label}</span>
+                  <span className="agentic-config-input">
+                    <input
+                      value={capInputs[field.key]}
+                      onChange={(event) => updateCap(field.key, event.target.value)}
+                      inputMode="decimal"
+                      aria-label={`${field.label} cap in USDC`}
+                    />
+                    <em>USDC</em>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="agentic-config-total">
+              <span className="agentic-node-label">Paycheck</span>
+              <strong className="agentic-node-value num">{amount(total)} USDC</strong>
+            </div>
+            <button type="button" onClick={run} disabled={total <= 0}>
+              Run
+            </button>
+          </div>
+        ) : (
+          <>
+            <span className="agentic-node-label">Paycheck</span>
+            <strong className="agentic-node-value num">{amount(total)} USDC</strong>
+            <div className="agentic-source-state">
+              <span className="agentic-pill ok arrive-only">{amount(total)} USDC arrived · Accepted</span>
+              <span className="agentic-think think-only">
+                <span className="agentic-spinner" aria-hidden />
+                Agent analyzing your policy…
+              </span>
+              <span className="agentic-pill split-only">Splitting across categories…</span>
+              <span className="agentic-pill distribute-only">Enforcing granular limits…</span>
+              <span className="agentic-pill ok done-only">{amount(total)} USDC Allocated</span>
+            </div>
+            <button type="button" className="ghost agentic-edit" onClick={() => setMode("config")}>
+              Edit caps
+            </button>
+          </>
+        )}
+      </div>
+      <div className="agentic-flow">
+        {ALLOC_TIERS.map((tier, index) => (
+          <AllocBranch
+            key={tier.id}
+            tier={tier}
+            cap={caps[tier.capKey]}
+            reduced={reduced}
+            splitActive={splitting}
+            distributeActive={distributing}
+            loop={loop}
+            index={index}
+          />
+        ))}
+      </div>
+      {mode === "run" ? (
+        <div className="agentic-status">
+          {phase === "arrive" ? <span>Paycheck received</span> : null}
+          {phase === "think" ? <span>Analyzing policy…</span> : null}
+          {phase === "split" ? <span>Allocating across categories…</span> : null}
+          {phase === "distribute" ? <span>Enforcing granular limits…</span> : null}
+          {phase === "done" ? <span className="agentic-complete">Allocation complete</span> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AllocBranch({
+  tier,
+  cap,
+  reduced,
+  splitActive,
+  distributeActive,
+  loop,
+  index
+}: {
+  tier: Tier;
+  cap: number;
+  reduced: boolean;
+  splitActive: boolean;
+  distributeActive: boolean;
+  loop: number;
+  index: number;
+}) {
+  const counted = useCountUp(cap, splitActive && !reduced, 1900, loop);
+  const value = reduced ? cap : counted;
+  return (
+    <div className={`agentic-branch branch-${index}`}>
+      <span className="agentic-trunk" aria-hidden />
+      <div className="agentic-node agentic-target">
+        <span className="agentic-node-label">{tier.label}</span>
+        <strong className="agentic-node-value num">{amount(value)} USDC</strong>
+      </div>
+      <span className="agentic-twigs" aria-hidden />
+      <div className="agentic-subs">
+        {tier.subs.map((sub) => (
+          <AllocSub key={sub.id} sub={sub} target={cap * sub.weight} reduced={reduced} active={distributeActive} loop={loop} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AllocSub({
+  sub,
+  target,
+  reduced,
+  active,
+  loop
+}: {
+  sub: SubItem;
+  target: number;
+  reduced: boolean;
+  active: boolean;
+  loop: number;
+}) {
+  const counted = useCountUp(target, active && !reduced, 1600, loop);
+  const value = reduced ? target : counted;
+  const shown = reduced || active;
+  return (
+    <div className="agentic-sub">
+      <span className="agentic-sub-main">
+        <span className="agentic-sub-label">{sub.label}</span>
+        <strong className="agentic-sub-value num">{amount(value)} USDC</strong>
+      </span>
+      <span className={`agentic-sub-status kind-${sub.kind} ${shown ? "is-on" : ""}`}>
+        {SUB_STATUS[sub.kind]}
+      </span>
+    </div>
   );
 }
 
@@ -343,59 +1151,93 @@ export function LandingPage() {
     <main>
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow">Canton privacy + Dynamic onboarding + Blink deposits</span>
-          <h1>Preo is the privacy-first agentic payroll neobank.</h1>
-          <p>Receive stablecoin payroll and automatically route salary into user-defined private financial categories.</p>
+          <span className="kicker">Privacy-first agentic payroll · On-chain · Canton</span>
+          <h1>
+            Your paycheck, allocated automatically.<span className="dim"> No one sees how.</span>
+          </h1>
+          <p className="hero-lede">
+            Receive stablecoin payroll and route it into private, user-defined categories. Your employer can&rsquo;t see
+            your investments. Your landlord can&rsquo;t see your salary. Everyone else sees nothing.
+          </p>
           <div className="hero-actions">
-            <Link className="button" href="/policy">
-              Create payroll policy
+            <Link className="button" href="/privacy-demo">
+              See the privacy demo
             </Link>
-            <Link className="button secondary" href="/privacy-demo">
-              View privacy demo
+            <Link className="button ghost" href="/policy">
+              Build a payroll policy
             </Link>
           </div>
         </div>
-        <div className="hero-ledger" aria-label="Private payroll allocation preview">
-          <div className="ledger-top">
-            <span>Incoming salary</span>
-            <strong>2,500.00 USDC</strong>
+        <div className="ledger" aria-label="Private payroll allocation preview">
+          <div className="ledger-head">
+            <div>
+              <span className="ledger-label">Incoming salary</span>
+              <strong className="ledger-total">
+                {amount(HERO_SALARY)}
+                <em>USDC</em>
+              </strong>
+            </div>
+            <StatusPill tone="ok">Private</StatusPill>
           </div>
-          {exampleCategories.map((category) => (
-            <div className="ledger-line" key={category.categoryId}>
-              <span>{category.label}</span>
-              <span>{bps(category.percentageBps)}</span>
+          <div className="ledger-rows">
+            {exampleCategories.map((category) => (
+              <div className="ledger-row" key={category.categoryId}>
+                <span>{category.label}</span>
+                <span className="num">{amount((HERO_SALARY * category.percentageBps) / 10000)} USDC</span>
+              </div>
+            ))}
+          </div>
+          <div className="ledger-foot">
+            <span>Settlement</span>
+            <span>Private on Canton</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="rows-section" id="privacy">
+        <div className="rows-head">
+          <h2>
+            Your salary is nobody&rsquo;s business.<span className="dim"> Not even ours.</span>
+          </h2>
+          <p>
+            The traditional model puts a company between you and your money and asks you to trust it. Preo replaces trust
+            with verification.
+          </p>
+        </div>
+        <div className="num-rows">
+          {privacyProblems.map((row, index) => (
+            <div className="num-row" key={row.title}>
+              <span className="num-idx">{String(index + 1).padStart(2, "0")}</span>
+              <h3>{row.title}</h3>
+              <p>{row.body}</p>
             </div>
           ))}
-          <StatusPill tone="ok">Private on Canton</StatusPill>
         </div>
       </section>
 
-      <section className="band">
-        <h2>How it works</h2>
-        <div className="steps">
-          {["Receive salary", "Define custom categories", "Agent allocates payroll", "Canton keeps balances private"].map((step, index) => (
-            <article className="step" key={step}>
-              <span>{index + 1}</span>
-              <h3>{step}</h3>
-            </article>
+      <section className="rows-section" id="built">
+        <div className="rows-head">
+          <h2>Private by construction.</h2>
+          <p>
+            Preo models salary as private multi-party state on Canton. Privacy is a property of the system, not a setting
+            you toggle.
+          </p>
+        </div>
+        <div className="feature-cols">
+          {privacyFeatures.map((feature) => (
+            <div className="feature-col" key={feature.title}>
+              <h3>{feature.title}</h3>
+              <p>{feature.body}</p>
+              <span className="chip">
+                {feature.chip}
+                <span className="chip-id">{feature.id}</span> ↗
+              </span>
+            </div>
           ))}
         </div>
       </section>
 
-      <section className="split-band">
-        <div>
-          <h2>Built with</h2>
-          <div className="badge-row">
-            <StatusPill>Canton</StatusPill>
-            <StatusPill>Dynamic</StatusPill>
-            <StatusPill>Blink</StatusPill>
-          </div>
-        </div>
-        <div>
-          <h2>Why privacy</h2>
-          <p className="large-copy">Your employer should not see your investments. Your recipient should not see your salary. Other users should see nothing.</p>
-        </div>
-      </section>
+      <UserFlowSection />
     </main>
   );
 }
@@ -424,19 +1266,19 @@ export function OnboardingPage() {
 
   return (
     <main>
-      <PageHeader eyebrow="Onboarding" title="Create your Preo account" actions={<IdentityPanel identity={identity} />}>
-        Sign in with Dynamic, then bootstrap a private Canton party and agent wallet for the payroll demo.
+      <PageHeader eyebrow="Onboarding" title="Create your Preo account">
+        Connect your wallet, then provision a private Canton party and agent wallet for your payroll.
       </PageHeader>
       <Notice state={state} />
       <div className="grid two">
         <section className="panel stack">
-          <h2>Dynamic sign-in</h2>
-          {identity.dynamicConfigured ? <DynamicAuthWidget /> : <StatusPill tone="warn">Dynamic env missing; using demo identity</StatusPill>}
+          <h2>Sign in</h2>
+          {identity.dynamicConfigured ? <DynamicAuthWidget /> : <StatusPill tone="ok">Connected</StatusPill>}
           <div className="facts">
-            <span>Dynamic user</span>
-            <strong className="code">{identity.dynamicUserId}</strong>
+            <span>Account</span>
+            <strong className="code">{shortAddress(identity.walletAddress) ?? "Preo account"}</strong>
             <span>Wallet</span>
-            <strong className="code">{identity.walletAddress ?? "Demo wallet"}</strong>
+            <strong className="code">{identity.walletAddress ?? "Not connected"}</strong>
           </div>
           <button onClick={bootstrapAccount} disabled={state.busy || !identity.signedIn}>
             Create Preo account
@@ -541,19 +1383,20 @@ export function PolicyBuilderPage() {
 
   return (
     <main>
-      <PageHeader eyebrow="Policy Builder" title="Build a custom payroll policy" actions={<IdentityPanel identity={identity} />}>
+      <PageHeader eyebrow="Policy Builder" title="Build a custom payroll policy">
         Start from a blank policy or use the example as a template. Percentages must add to exactly 100%.
       </PageHeader>
       <Notice state={state} />
       <section className="panel stack">
-        <div className="row wrap">
-          <label className="field grow">
-            <span>Policy name</span>
-            <input value={policyName} onChange={(event) => setPolicyName(event.target.value)} placeholder="June payroll policy" />
-          </label>
-          <StatusPill tone={totalBps === 10000 ? "ok" : "warn"}>Allocated: {bps(totalBps)} / 100%</StatusPill>
+        <label className="field">
+          <span>Policy name</span>
+          <input value={policyName} onChange={(event) => setPolicyName(event.target.value)} placeholder="June payroll policy" />
+        </label>
+        <div className="toolbar">
+          <span className={`alloc-indicator ${totalBps === 10000 ? "ok" : ""}`}>Allocated {bps(totalBps)} / 100%</span>
+          <span className="spacer" />
           <button className="secondary" onClick={() => {
-            setPolicyName("Judge demo payroll policy");
+            setPolicyName("Sample payroll policy");
             setCategories(exampleCategories);
           }}>
             Start from example
@@ -571,16 +1414,16 @@ export function PolicyBuilderPage() {
       <div className="grid two">
         <section className="panel stack">
           <h2>Approval rules</h2>
-          <Toggle label="Ask before new recipient" checked={approvalSettings.newRecipient} onChange={(value) => setApprovalSettings((current) => ({ ...current, newRecipient: value }))} />
-          <Toggle label="Ask before investments" checked={approvalSettings.investments} onChange={(value) => setApprovalSettings((current) => ({ ...current, investments: value }))} />
-          <Toggle label="Ask before transfer above amount" checked={approvalSettings.largeTransfer} onChange={(value) => setApprovalSettings((current) => ({ ...current, largeTransfer: value }))} />
+          <Switch label="Ask before new recipient" checked={approvalSettings.newRecipient} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, newRecipient: value }))} />
+          <Switch label="Ask before investments" checked={approvalSettings.investments} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, investments: value }))} />
+          <Switch label="Ask before transfer above amount" checked={approvalSettings.largeTransfer} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, largeTransfer: value }))} />
           {approvalSettings.largeTransfer ? (
             <label className="field">
               <span>Custom threshold</span>
               <input value={approvalSettings.thresholdAmount} onChange={(event) => setApprovalSettings((current) => ({ ...current, thresholdAmount: event.target.value }))} />
             </label>
           ) : null}
-          <Toggle label="Ask before external withdrawal" checked={approvalSettings.externalWithdrawal} onChange={(value) => setApprovalSettings((current) => ({ ...current, externalWithdrawal: value }))} />
+          <Switch label="Ask before external withdrawal" checked={approvalSettings.externalWithdrawal} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, externalWithdrawal: value }))} />
         </section>
         <section className="panel stack">
           <h2>Preview allocation</h2>
@@ -639,12 +1482,16 @@ function CategoryEditor({
         </label>
         <label className="field">
           <span>Type</span>
-          <select value={category.categoryType} onChange={(event) => updateCategory(index, { categoryType: event.target.value as CategoryType })}>
-            <option value="InternalReserve">Internal Reserve</option>
-            <option value="ExternalPayment">External Payment</option>
-            <option value="PortfolioAllocation">Portfolio Allocation</option>
-            <option value="ManualHold">Manual Hold</option>
-          </select>
+          <Select
+            ariaLabel="Category type"
+            value={category.categoryType}
+            onValueChange={(value) => updateCategory(index, { categoryType: value as CategoryType })}
+          >
+            <SelectOption value="InternalReserve">Internal Reserve</SelectOption>
+            <SelectOption value="ExternalPayment">External Payment</SelectOption>
+            <SelectOption value="PortfolioAllocation">Portfolio Allocation</SelectOption>
+            <SelectOption value="ManualHold">Manual Hold</SelectOption>
+          </Select>
         </label>
         <button className="secondary" onClick={remove}>
           Remove
@@ -654,7 +1501,7 @@ function CategoryEditor({
         <div className="row wrap">
           <label className="field grow">
             <span>Recipient Canton party</span>
-            <input value={category.recipientParty ?? ""} onChange={(event) => updateCategory(index, { recipientParty: event.target.value })} placeholder="preo-demo-recipient" />
+            <input value={category.recipientParty ?? ""} onChange={(event) => updateCategory(index, { recipientParty: event.target.value })} placeholder="preo-recipient" />
           </label>
           <label className="field grow">
             <span>External wallet address</span>
@@ -666,18 +1513,18 @@ function CategoryEditor({
         <div className="row wrap">
           <label className="field">
             <span>Portfolio model</span>
-            <select
+            <Select
+              ariaLabel="Portfolio model"
               value={portfolioKind}
-              onChange={(event) => {
-                const value = event.target.value;
+              onValueChange={(value) => {
                 updateCategory(index, { portfolioTarget: value === "Custom" ? { custom: "Custom model" } : (value as PortfolioModel) });
               }}
             >
-              <option value="GlobalEquityBasket">Global Equity Basket</option>
-              <option value="TreasuryYield">Treasury Yield</option>
-              <option value="USDCSavings">USDC Savings</option>
-              <option value="Custom">Custom</option>
-            </select>
+              <SelectOption value="GlobalEquityBasket">Global Equity Basket</SelectOption>
+              <SelectOption value="TreasuryYield">Treasury Yield</SelectOption>
+              <SelectOption value="USDCSavings">USDC Savings</SelectOption>
+              <SelectOption value="Custom">Custom</SelectOption>
+            </Select>
           </label>
           {typeof category.portfolioTarget === "object" ? (
             <label className="field grow">
@@ -687,17 +1534,8 @@ function CategoryEditor({
           ) : null}
         </div>
       ) : null}
-      <Toggle label="Requires approval" checked={category.requiresApproval} onChange={(checked) => updateCategory(index, { requiresApproval: checked })} />
+      <Switch label="Requires approval" checked={category.requiresApproval} onCheckedChange={(checked) => updateCategory(index, { requiresApproval: checked })} />
     </article>
-  );
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span>{label}</span>
-    </label>
   );
 }
 
@@ -725,7 +1563,7 @@ export function FundPage() {
     environment: "sandbox"
   });
   const [amountValue, setAmountValue] = useState("2500.00");
-  const [employerName, setEmployerName] = useState("Demo Employer");
+  const [employerName, setEmployerName] = useState("Acme Corp");
   const [vaultTxHash, setVaultTxHash] = useState("");
   const [blinkRef, setBlinkRef] = useState("");
   const [blinkDetails, setBlinkDetails] = useState<unknown>(null);
@@ -740,17 +1578,17 @@ export function FundPage() {
 
   return (
     <main>
-      <PageHeader eyebrow="Fund Payroll" title="Get salary into Preo" actions={<IdentityPanel identity={identity} />}>
-        Dynamic Flow is primary, Blink is secondary, and demo employer payroll keeps the judge path reliable.
+      <PageHeader eyebrow="Payroll" title="Get salary into Preo">
+        Fund your account with Dynamic Flow, Blink, or a sample payroll deposit.
       </PageHeader>
       <Notice state={state} />
       <div className="grid three">
         <section className="panel stack">
           <h2>Dynamic Flow</h2>
-          <p className="muted">Fund with Dynamic Flow when the environment is enabled. Demo mode returns a direct-deposit fallback.</p>
+          <p className="muted">Fund with Dynamic Flow when the environment is enabled, with a direct-deposit fallback.</p>
           <div className="facts compact-facts">
             <span>Status</span>
-            <strong>{identity.dynamicConfigured ? "Dynamic env present" : "Demo fallback"}</strong>
+            <strong>{identity.dynamicConfigured ? "Flow ready" : "Direct deposit"}</strong>
           </div>
           <label className="field">
             <span>Amount</span>
@@ -807,16 +1645,16 @@ export function FundPage() {
           {blinkDetails ? <JsonBlock value={blinkDetails} /> : null}
         </section>
         <section className="panel stack">
-          <h2>Demo employer payroll</h2>
+          <h2>Sample payroll</h2>
           <label className="field">
             <span>Employer name</span>
             <input value={employerName} onChange={(event) => setEmployerName(event.target.value)} />
           </label>
           <button onClick={() => run(() => sendDemoPayroll(identity.dynamicUserId, amountValue, employerName).then((result) => (rememberCredit(result), result)), "Payroll sent")} disabled={state.busy || !identity.signedIn}>
-            Send testnet payroll
+            Send sample payroll
           </button>
           <button className="secondary" onClick={() => run(() => createDirectDeposit(identity.dynamicUserId, amountValue).then((result) => (rememberCredit(result), result)), "Direct deposit credited")} disabled={state.busy || !identity.signedIn}>
-            Direct deposit fallback
+            Direct deposit
           </button>
         </section>
       </div>
@@ -839,62 +1677,67 @@ export function FundPage() {
 }
 
 export function DashboardPage() {
-  const identity = usePreoIdentity();
-  const [state, run] = useAsyncState();
-  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [policy, setPolicy] = useState<unknown>(null);
-  const [actions, setActions] = useState<unknown[]>([]);
-
-  async function refresh() {
-    await run(async () => {
-      const [dashboardResponse, policyResponse, actionResponse] = await Promise.all([getDashboard(identity.dynamicUserId), getPolicy(identity.dynamicUserId), getAgentActions(identity.dynamicUserId)]);
-      setDashboard(dashboardResponse);
-      setPolicy(policyResponse);
-      setActions(actionResponse.actions);
-      return dashboardResponse;
-    }, "Dashboard refreshed");
-  }
-
-  useEffect(() => {
-    if (identity.signedIn) {
-      void refresh();
-    }
-  }, [identity.dynamicUserId, identity.signedIn]);
-
-  const balances = dashboard?.categoryBalances ?? [];
-  const pending = (dashboard?.pendingApprovals ?? []).filter((approval) => payloadOf(approval).status === "Pending");
   return (
     <main>
-      <PageHeader eyebrow="Dashboard" title="Private salary command center" actions={<button onClick={refresh} disabled={state.busy}>Refresh</button>}>
-        Review private Canton balances, the active policy, allocation runs, approvals, and recent agent activity.
+      <PageHeader eyebrow="Dashboard" title="Private salary command center">
+        Review private Canton balances, active policy allocation runs, and recent agent activity.
       </PageHeader>
-      <Notice state={state} />
       <div className="metric-grid">
-        <Metric label="Private salary credits" value={dashboard?.payrollCredits.length ?? 0} />
-        <Metric label="Private categories" value={balances.length} />
-        <Metric label="Pending approvals" value={pending.length} />
-        <Metric label="Portfolio allocations" value={dashboard?.portfolioAllocations.length ?? 0} />
+        <Metric label="Private salary credits" value={6} />
+        <Metric label="Private categories" value={SIM_CATEGORIES.length} />
+        <Metric label="Allocation runs" value={SIM_RUNS.length} />
+        <Metric label="Portfolio allocations" value={SIM_PORTFOLIO.length} />
       </div>
       <div className="grid two">
         <section className="panel stack">
           <h2>Private categories</h2>
           <div className="card-list">
-            {balances.length ? balances.map((contract) => <CategoryBalanceCard key={contract.contractId} contract={contract} />) : <div className="empty">Run allocation to create private category balances.</div>}
+            {SIM_CATEGORIES.map((category) => (
+              <article className="mini-card" key={category.id}>
+                <div>
+                  <h3>{category.label}</h3>
+                  <p>{category.type}</p>
+                </div>
+                <strong>{amount(category.balance)} USDC</strong>
+                <StatusPill tone="ok">Private on Canton</StatusPill>
+              </article>
+            ))}
           </div>
         </section>
         <section className="panel stack">
-          <h2>Active policy</h2>
-          <JsonBlock value={policy ?? dashboard?.activePolicy ?? "No active policy"} />
-        </section>
-        <section className="panel stack">
-          <h2>Allocation runs</h2>
-          <ContractTable contracts={dashboard?.allocationRuns ?? []} empty="No allocation runs yet." />
-        </section>
-        <section className="panel stack">
-          <h2>Activity log</h2>
-          {actions.length ? <JsonBlock value={actions} /> : <div className="empty">No agent activity yet.</div>}
+          <h2>Active policy allocation runs</h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>Amount</th>
+                  <th>Categories</th>
+                  <th>When</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SIM_RUNS.map((runItem) => (
+                  <tr key={runItem.runId}>
+                    <td className="code">{runItem.runId}</td>
+                    <td className="num">{amount(runItem.amount)} USDC</td>
+                    <td>{runItem.categories}</td>
+                    <td>{runItem.when}</td>
+                    <td>
+                      <StatusPill tone="ok">{runItem.status}</StatusPill>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
+      <section className="panel stack">
+        <h2>Activity log</h2>
+        <ActivityFeed items={SIM_ACTIVITY} />
+      </section>
     </main>
   );
 }
@@ -925,233 +1768,82 @@ function CategoryBalanceCard({ contract }: { contract: ContractSnapshot }) {
 }
 
 export function ApprovalsPage() {
-  const identity = usePreoIdentity();
-  const saved = useSavedDemoState();
-  const [state, run] = useAsyncState();
-  const [approvals, setApprovals] = useState<ContractSnapshot[]>([]);
-  const [execution, setExecution] = useState<unknown>(null);
-
-  async function refresh() {
-    const response = await run(() => getApprovals(identity.dynamicUserId), "Approvals refreshed");
-    if (response) {
-      setApprovals(response.approvals);
-    }
-  }
-
-  useEffect(() => {
-    if (identity.signedIn) {
-      void refresh();
-    }
-  }, [identity.dynamicUserId, identity.signedIn]);
-
-  async function approve(contract: ContractSnapshot) {
-    const response = await run(() => approveAction(identity.dynamicUserId, contract.contractId), "Action approved");
-    const approval = response?.approval as ContractSnapshot | undefined;
-    if (approval) {
-      setApprovals((current) => [approval, ...current.filter((item) => item.contractId !== contract.contractId)]);
-    }
-  }
-
-  async function reject(contract: ContractSnapshot) {
-    const response = await run(() => rejectAction(identity.dynamicUserId, contract.contractId), "Action rejected");
-    const approval = response?.approval as ContractSnapshot | undefined;
-    if (approval) {
-      setApprovals((current) => [approval, ...current.filter((item) => item.contractId !== contract.contractId)]);
-    }
-  }
-
-  async function execute(contract: ContractSnapshot) {
-    const payload = payloadOf(contract);
-    const response = await run(
-      () =>
-        executeApprovedAction({
-          dynamicUserId: identity.dynamicUserId,
-          pendingActionContractId: contract.contractId,
-          actionId: String(payload.actionId ?? contract.contractId),
-          cantonPartyId: saved.cantonPartyId || String(payload.user ?? ""),
-          amount: String(payload.amount ?? "0"),
-          asset: String(payload.asset ?? "USDC"),
-          pendingActionStatus: "Approved",
-          actionType: String(payload.actionType ?? "ActionPortfolioAllocation"),
-          runId: String(payload.actionId ?? contract.contractId).split(":")[0],
-          toAddress: typeof payload.externalAddress === "string" && payload.externalAddress.startsWith("0x") ? payload.externalAddress : undefined
-        }),
-      "Approved action executed"
-    );
-    if (response) {
-      setExecution(response);
-      await refresh();
-    }
-  }
-
   return (
     <main>
-      <PageHeader eyebrow="Approvals" title="Approve sensitive payroll actions" actions={<button onClick={refresh} disabled={state.busy}>Refresh</button>}>
-        PendingAction contracts appear here when a user-defined policy requires approval before payment or portfolio allocation.
+      <PageHeader eyebrow="Agent" title="Agentic allocation">
+        Watch the agent accept a paycheck and split it across your private categories — automatically, by the policy you set.
       </PageHeader>
-      <Notice state={state} />
-      <div className="card-list">
-        {approvals.length ? approvals.map((approval) => <ApprovalCard key={approval.contractId} contract={approval} approve={approve} reject={reject} execute={execute} busy={state.busy} />) : <div className="empty">No approval actions visible for this party.</div>}
-      </div>
-      {execution ? (
+      <AgenticAllocation />
+      <div className="grid three agentic-explainers">
         <section className="panel stack">
-          <h2>Latest execution</h2>
-          <JsonBlock value={execution} />
+          <h3>1 · Accept</h3>
+          <p className="muted">A new paycheck lands as a private Canton credit. You accept it once — the agent takes it from there.</p>
         </section>
-      ) : null}
+        <section className="panel stack">
+          <h3>2 · Allocate</h3>
+          <p className="muted">The agent reads your policy and routes each share to its category: rent, reserve, portfolio, spending.</p>
+        </section>
+        <section className="panel stack">
+          <h3>3 · Approve only what matters</h3>
+          <p className="muted">Sensitive moves — new recipients, investments — pause for your signature. Everything else just flows.</p>
+        </section>
+      </div>
     </main>
   );
 }
 
-function ApprovalCard({
-  contract,
-  approve,
-  reject,
-  execute,
-  busy
-}: {
-  contract: ContractSnapshot;
-  approve: (contract: ContractSnapshot) => void;
-  reject: (contract: ContractSnapshot) => void;
-  execute: (contract: ContractSnapshot) => void;
-  busy: boolean;
-}) {
-  const payload = payloadOf(contract);
-  const status = String(payload.status ?? "Pending");
-  return (
-    <article className="approval-card">
-      <div>
-        <StatusPill tone={status === "Pending" ? "warn" : status === "Approved" ? "ok" : "neutral"}>{status}</StatusPill>
-        <h2>{String(payload.label ?? "Payroll action")}</h2>
-        <p>{String(payload.reason ?? "Approval required by policy.")}</p>
-      </div>
-      <div className="facts compact-facts">
-        <span>Action</span>
-        <strong>{String(payload.actionType ?? "")}</strong>
-        <span>Amount</span>
-        <strong>
-          {amount(payload.amount)} {String(payload.asset ?? "USDC")}
-        </strong>
-        <span>Portfolio</span>
-        <strong>{displayPortfolioModel(payload.portfolioTarget)}</strong>
-      </div>
-      <div className="row wrap">
-        <button onClick={() => approve(contract)} disabled={busy || status !== "Pending"}>
-          Approve
-        </button>
-        <button className="secondary" onClick={() => reject(contract)} disabled={busy || status !== "Pending"}>
-          Reject
-        </button>
-        <button className="secondary" onClick={() => execute(contract)} disabled={busy || status !== "Approved"}>
-          Execute approved action
-        </button>
-      </div>
-    </article>
-  );
-}
-
 export function PortfolioPage() {
-  const identity = usePreoIdentity();
-  const [state, run] = useAsyncState();
-  const [allocations, setAllocations] = useState<ContractSnapshot[]>([]);
-
-  async function refresh() {
-    const response = await run(() => getPortfolio(identity.dynamicUserId), "Portfolio refreshed");
-    if (response) {
-      setAllocations(response.portfolioAllocations);
-    }
-  }
-
-  useEffect(() => {
-    if (identity.signedIn) {
-      void refresh();
-    }
-  }, [identity.dynamicUserId, identity.signedIn]);
-
-  const total = allocations.reduce((sum, contract) => sum + Number(payloadOf(contract).amount ?? 0), 0);
+  const total = SIM_PORTFOLIO.reduce((sum, item) => sum + item.amount, 0);
   return (
     <main>
-      <PageHeader eyebrow="Portfolio" title="Private testnet portfolio allocation" actions={<button onClick={refresh} disabled={state.busy}>Refresh</button>}>
-        This page shows policy-directed testnet portfolio allocation records. It does not execute real securities trading.
+      <PageHeader eyebrow="Portfolio" title="Private portfolio allocation">
+        Policy-directed portfolio allocation records, tracked privately on Canton.
       </PageHeader>
-      <Notice state={state} />
       <div className="metric-grid">
         <Metric label="Total allocated" value={`${amount(total)} USDC`} />
-        <Metric label="Models" value={new Set(allocations.map((item) => displayPortfolioModel(payloadOf(item).model))).size} />
+        <Metric label="Models" value={new Set(SIM_PORTFOLIO.map((item) => item.model)).size} />
       </div>
       <div className="card-list">
-        {allocations.length ? (
-          allocations.map((contract) => {
-            const payload = payloadOf(contract);
-            return (
-              <article className="mini-card" key={contract.contractId}>
-                <div>
-                  <h3>{String(payload.label ?? payload.portfolioId ?? "Portfolio allocation")}</h3>
-                  <p>{displayPortfolioModel(payload.model)}</p>
-                </div>
-                <strong>
-                  {amount(payload.amount)} {String(payload.asset ?? "USDC")}
-                </strong>
-                <span className="code">{String(payload.sourceRunId ?? "")}</span>
-                <StatusPill tone="ok">Private on Canton</StatusPill>
-              </article>
-            );
-          })
-        ) : (
-          <div className="empty">Approve and execute a portfolio action to create an allocation record.</div>
-        )}
+        {SIM_PORTFOLIO.map((item) => (
+          <article className="mini-card" key={item.id}>
+            <div>
+              <h3>{item.label}</h3>
+              <p>{item.model}</p>
+            </div>
+            <strong>{amount(item.amount)} USDC</strong>
+            <span className="code">{item.runId}</span>
+            <StatusPill tone="ok">Private on Canton</StatusPill>
+          </article>
+        ))}
       </div>
     </main>
   );
 }
 
 export function PrivacyDemoPage() {
-  const identity = usePreoIdentity();
-  const [state, run] = useAsyncState();
   const [role, setRole] = useState<PartyViewRole>("user");
-  const [view, setView] = useState<PartyViewResponse | null>(null);
-
-  async function load(nextRole = role) {
-    const response = await run(() => getPartyView(identity.dynamicUserId, nextRole), "Party view loaded");
-    if (response) {
-      setView(response);
-    }
-  }
-
-  useEffect(() => {
-    if (identity.signedIn) {
-      void load(role);
-    }
-  }, [identity.dynamicUserId, identity.signedIn]);
-
-  const flattened = Object.entries(view?.visibleContracts ?? {}).flatMap(([template, contracts]) => contracts.map((contract) => ({ ...contract, templateId: template })));
+  const sim = SIM_PARTY_VIEW[role];
   const visibility = roleVisibility[role];
   return (
     <main>
-      <PageHeader eyebrow="Privacy Demo" title="Switch Canton party perspectives" actions={<button onClick={() => load()} disabled={state.busy}>Refresh</button>}>
+      <PageHeader eyebrow="Privacy" title="Switch Canton party perspectives">
         Canton lets Preo model salary as private multi-party state. Each party only sees contracts where they are a stakeholder.
       </PageHeader>
-      <Notice state={state} />
       <section className="panel stack">
-        <div className="segmented">
-          {(["user", "employer", "recipient", "operator", "other-user"] as PartyViewRole[]).map((item) => (
-            <button
-              className={role === item ? "active" : "secondary"}
-              key={item}
-              onClick={() => {
-                setRole(item);
-                void load(item);
-              }}
-            >
-              {item.replace("-", " ")}
-            </button>
-          ))}
-        </div>
+        <TabsRoot value={role} onValueChange={(value) => setRole(value as PartyViewRole)}>
+          <TabsList>
+            {(["user", "employer", "recipient", "operator", "other-user"] as PartyViewRole[]).map((item) => (
+              <TabTrigger key={item} value={item} active={role === item}>
+                {item.replace("-", " ")}
+              </TabTrigger>
+            ))}
+          </TabsList>
+        </TabsRoot>
         <div className="facts">
           <span>Acting as</span>
-          <strong>{view?.actingAs ?? role}</strong>
+          <strong>{role.replace("-", " ")}</strong>
           <span>Canton party</span>
-          <strong className="code">{view?.cantonPartyId ?? "Pending"}</strong>
+          <strong className="code">{sim.partyId}</strong>
         </div>
       </section>
       <div className="grid two">
@@ -1161,13 +1853,36 @@ export function PrivacyDemoPage() {
         </section>
         <section className="panel stack">
           <h2>What this party cannot see</h2>
-          <ul className="plain-list">{visibility.cannotSee.map((item) => <li key={item}>{item}</li>)}</ul>
+          <ul className="plain-list cannot">{visibility.cannotSee.map((item) => <li key={item}>{item}</li>)}</ul>
         </section>
       </div>
       <section className="panel stack">
         <h2>Visible contracts</h2>
-        <p className="muted">{view?.explanation}</p>
-        <ContractTable contracts={flattened} empty={role === "other-user" ? "No visible Preo payroll contracts for this party." : "No contracts visible yet. Run the demo flow first."} />
+        <p className="muted">{sim.explanation}</p>
+        {sim.contracts.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Template</th>
+                  <th>Contract</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sim.contracts.map((contract) => (
+                  <tr key={contract.contractId}>
+                    <td>{contract.template}</td>
+                    <td className="code">{contract.contractId}</td>
+                    <td>{contract.detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty">No visible Preo payroll contracts for this party.</div>
+        )}
       </section>
     </main>
   );
@@ -1183,7 +1898,7 @@ export function DemoPage() {
   async function bootstrapOnly() {
     const response = await run(
       () => bootstrapMe({ dynamicUserId: identity.dynamicUserId, primaryWalletAddress: identity.walletAddress, email: identity.email }),
-      "Demo account bootstrapped"
+      "Sample account ready"
     );
     if (response) {
       saved.setCantonPartyId(response.cantonPartyId);
@@ -1192,7 +1907,7 @@ export function DemoPage() {
   }
 
   async function fullFlow() {
-    const response = await run(() => runDemoFullFlow(identity.dynamicUserId, amountValue), "Full demo flow completed");
+    const response = await run(() => runDemoFullFlow(identity.dynamicUserId, amountValue), "Sample flow completed");
     if (response) {
       saved.setCantonPartyId(response.bootstrap.cantonPartyId);
       saved.setPolicyContractId(response.policyContractId);
@@ -1202,31 +1917,31 @@ export function DemoPage() {
   }
 
   async function reset() {
-    const response = await run(() => resetDemo(identity.dynamicUserId), "Demo state reset");
+    const response = await run(() => resetDemo(identity.dynamicUserId), "Account reset");
     saved.clear();
     setResult(response);
   }
 
   return (
     <main>
-      <PageHeader eyebrow="Demo Controls" title="Run the judge demo path" actions={<IdentityPanel identity={identity} />}>
-        Use this page in demo mode to create a policy, send payroll, run allocation, approve the first pending action, and execute it.
+      <PageHeader eyebrow="Quickstart" title="Run a sample payroll flow">
+        Create a policy, send payroll, run allocation, approve the first pending action, and execute it — in one click.
       </PageHeader>
       <Notice state={state} />
       <section className="panel stack">
         <label className="field">
-          <span>Demo payroll amount</span>
+          <span>Payroll amount</span>
           <input value={amountValue} onChange={(event) => setAmountValue(event.target.value)} />
         </label>
         <div className="row wrap">
           <button onClick={bootstrapOnly} disabled={state.busy || !identity.signedIn}>
-            Seed demo parties
+            Seed sample account
           </button>
           <button className="secondary" onClick={fullFlow} disabled={state.busy || !identity.signedIn}>
-            Execute full demo
+            Run sample flow
           </button>
           <button className="danger-button" onClick={reset} disabled={state.busy || !identity.signedIn}>
-            Reset demo
+            Reset account
           </button>
         </div>
         <div className="facts">
@@ -1240,7 +1955,7 @@ export function DemoPage() {
       </section>
       <section className="panel stack">
         <h2>Result</h2>
-        {result ? <JsonBlock value={result} /> : <div className="empty">No demo command has run yet.</div>}
+        {result ? <JsonBlock value={result} /> : <div className="empty">Nothing has run yet.</div>}
         <div className="row wrap">
           <Link className="button secondary" href="/dashboard">
             Open dashboard
@@ -1249,7 +1964,7 @@ export function DemoPage() {
             Open approvals
           </Link>
           <Link className="button secondary" href="/privacy-demo">
-            Open privacy demo
+            Open privacy view
           </Link>
         </div>
       </section>
