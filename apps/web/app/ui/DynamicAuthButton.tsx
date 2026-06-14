@@ -16,12 +16,36 @@ function DynamicLoadingButton() {
   );
 }
 
-const DynamicWidgetButton = dynamic(
+const DynamicConnectControl = dynamic(
   () =>
     import("@dynamic-labs/sdk-react-core").then((mod) => {
-      const { DynamicWidget } = mod;
-      return function DynamicWidgetButtonWithLabel() {
-        return <DynamicWidget innerButtonComponent="Connect wallet" />;
+      const { useDynamicContext } = mod;
+      return function DynamicConnectControl() {
+        const { primaryWallet, sdkHasLoaded, setShowAuthFlow } = useDynamicContext();
+
+        if (!sdkHasLoaded) {
+          return <DynamicLoadingButton />;
+        }
+
+        if (primaryWallet) {
+          return (
+            <button className="rounded-md border px-3 py-2 text-sm opacity-80" disabled type="button">
+              Wallet connected
+            </button>
+          );
+        }
+
+        return (
+          <button
+            className="rounded-md border px-3 py-2 text-sm"
+            onClick={() => {
+              setShowAuthFlow(true);
+            }}
+            type="button"
+          >
+            Connect wallet
+          </button>
+        );
       };
     }),
   {
@@ -35,5 +59,5 @@ export function DynamicAuthButton() {
     return <DynamicFallback />;
   }
 
-  return <DynamicWidgetButton />;
+  return <DynamicConnectControl />;
 }
