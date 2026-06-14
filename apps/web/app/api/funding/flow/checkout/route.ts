@@ -2,14 +2,14 @@ import { createDynamicFlowConfigFromEnv, createFlowCheckoutTransaction, getFlowA
 import { flowCheckoutRequestSchema } from "@preo/shared";
 import { errorResponse, ok, parseJson } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { getRequiredUser } from "@/lib/users";
+import { ensureBootstrappedUser } from "@/lib/users";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, flowCheckoutRequestSchema);
-    const user = await getRequiredUser(input.dynamicUserId);
+    const { user } = await ensureBootstrappedUser({ dynamicUserId: input.dynamicUserId, requireCantonProfile: false });
     const config = createDynamicFlowConfigFromEnv();
     const availability = getFlowAvailability(config);
 

@@ -1,14 +1,14 @@
 import { blinkSignPaymentRequestSchema } from "@preo/shared";
 import { createBlinkSignedPayload } from "@/lib/blink";
 import { errorResponse, ok, parseJson } from "@/lib/http";
-import { getSettlementConfig } from "@/lib/settlement";
+import { getFundingSettlementConfig } from "@/lib/settlement";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, blinkSignPaymentRequestSchema);
-    const config = getSettlementConfig();
+    const config = getFundingSettlementConfig();
 
     if (input.chainId !== config.chainId) {
       return errorResponse(new Error(`Unsupported settlement chain ${input.chainId}`), 400);

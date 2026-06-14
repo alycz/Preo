@@ -1,16 +1,16 @@
 import { blinkSessionRequestSchema } from "@preo/shared";
 import { errorResponse, ok, parseJson } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { externalRefHash, getSettlementConfig, preoUserIdHash } from "@/lib/settlement";
-import { getRequiredUser } from "@/lib/users";
+import { externalRefHash, getFundingSettlementConfig, preoUserIdHash } from "@/lib/settlement";
+import { ensureBootstrappedUser } from "@/lib/users";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, blinkSessionRequestSchema);
-    const user = await getRequiredUser(input.dynamicUserId);
-    const config = getSettlementConfig();
+    const { user } = await ensureBootstrappedUser({ dynamicUserId: input.dynamicUserId, requireCantonProfile: false });
+    const config = getFundingSettlementConfig();
     const amount = input.amount ?? "250.00";
     const externalRef = `blink-${user.id}-${Date.now()}`;
     const externalRefBytes32 = externalRefHash(externalRef);

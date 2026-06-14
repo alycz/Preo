@@ -33,6 +33,21 @@ export function getSettlementConfig(env: NodeJS.ProcessEnv = process.env): Settl
   };
 }
 
+export function getFundingSettlementConfig(env: NodeJS.ProcessEnv = process.env): SettlementConfig {
+  try {
+    return getSettlementConfig(env);
+  } catch {
+    const chainId = env.SETTLEMENT_CHAIN_ID ? Number(env.SETTLEMENT_CHAIN_ID) : 84532;
+    return {
+      chainId,
+      rpcUrl: env.SETTLEMENT_RPC_URL,
+      tokenAddress: envAddress(env.TESTNET_USDC_ADDRESS, DEMO_TOKEN_ADDRESS),
+      vaultAddress: envAddress(env.PREO_FUNDING_VAULT_ADDRESS, DEMO_VAULT_ADDRESS),
+      demoMode: true
+    };
+  }
+}
+
 export function preoUserIdHash(preoUserId: string): Hex {
   return keccak256(toHex(preoUserId));
 }
