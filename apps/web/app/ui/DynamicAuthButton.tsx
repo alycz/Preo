@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { type ReactNode } from "react";
 import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 
-function DynamicFallback({ children = "Dynamic env missing" }: { children?: React.ReactNode }) {
+function DynamicFallback({ children = "Dynamic env missing" }: { children?: ReactNode }) {
   return <span className="status warn">{children}</span>;
 }
 
@@ -15,12 +16,12 @@ function DynamicLoadingButton() {
   );
 }
 
-const DynamicConnectButton = dynamic(
+const DynamicWidgetButton = dynamic(
   () =>
     import("@dynamic-labs/sdk-react-core").then((mod) => {
-      const { DynamicConnectButton: DynamicSdkConnectButton } = mod;
-      return function DynamicConnectButtonWithLabel() {
-        return <DynamicSdkConnectButton>Connect wallet</DynamicSdkConnectButton>;
+      const { DynamicWidget } = mod;
+      return function DynamicWidgetButtonWithLabel() {
+        return <DynamicWidget innerButtonComponent="Connect wallet" />;
       };
     }),
   {
@@ -34,5 +35,5 @@ export function DynamicAuthButton() {
     return <DynamicFallback />;
   }
 
-  return <DynamicConnectButton />;
+  return <DynamicWidgetButton />;
 }
