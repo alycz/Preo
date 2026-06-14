@@ -33,6 +33,29 @@ describe("Blink signing", () => {
     expect(JSON.stringify(signed)).not.toContain("PRIVATE KEY");
   });
 
+  it("accepts merchant keys in the formats env vars commonly mangle", () => {
+    const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const pkcs8Pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const keyVariants = {
+      "escaped-newline PEM": pkcs8Pem.replace(/\n/g, "\\n"),
+      "quoted escaped-newline PEM": `"${pkcs8Pem.replace(/\n/g, "\\n")}"`,
+      "base64 DER PKCS#8": privateKey.export({ type: "pkcs8", format: "der" }).toString("base64"),
+      "base64 DER SEC1": privateKey.export({ type: "sec1", format: "der" }).toString("base64")
+    };
+
+    for (const [label, privateKeyPem] of Object.entries(keyVariants)) {
+      const signed = createBlinkSignedPayload(payment, { merchantId: "merchant", privateKeyPem });
+      expect(signed.signature, label).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(signed.preview.demoMode, label).toBe(false);
+    }
+  });
+
+  it("throws a clear error when the merchant key is unparseable", () => {
+    expect(() => createBlinkSignedPayload(payment, { merchantId: "merchant", privateKeyPem: "not-a-real-key" })).toThrow(
+      /BLINK_MERCHANT_PRIVATE_KEY could not be parsed/
+    );
+  });
+
   it("sets no-store headers on signer responses", async () => {
     process.env.DEMO_MODE = "true";
     process.env.SETTLEMENT_CHAIN_ID = "84532";

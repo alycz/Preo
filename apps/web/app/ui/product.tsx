@@ -1603,6 +1603,7 @@ export function FundPage() {
   const [blinkDetails, setBlinkDetails] = useState<unknown>(null);
   const [latest, setLatest] = useState<unknown>(null);
   const [payrollCelebration, setPayrollCelebration] = useState(false);
+  const [flowResult, setFlowResult] = useState<Record<string, unknown> | null>(null);
 
   async function rememberCredit(result: Record<string, unknown> | undefined) {
     if (typeof result?.cantonCreditContractId === "string") {
@@ -1629,9 +1630,53 @@ export function FundPage() {
             <span>Amount</span>
             <input value={amountValue} onChange={(event) => setAmountValue(event.target.value)} />
           </label>
-          <button onClick={() => run(() => createFlowCheckout(identity.dynamicUserId, amountValue).then((result) => (setLatest(result), result)), "Flow deposit started")} disabled={state.busy || !identity.signedIn}>
+          <button
+            onClick={() =>
+              run(async () => {
+                const result = await createFlowCheckout(identity.dynamicUserId, amountValue);
+                setLatest(result);
+                setFlowResult(result);
+                const checkoutUrl =
+                  typeof result.checkoutUrl === "string"
+                    ? result.checkoutUrl
+                    : typeof result.url === "string"
+                      ? result.url
+                      : null;
+                // When Dynamic Flow is enabled the API returns a hosted checkout to open.
+                if (result.nextAction === "start_dynamic_flow_checkout_in_client" && checkoutUrl) {
+                  window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+                }
+                return result;
+              }, "Flow deposit started")
+            }
+            disabled={state.busy || !identity.signedIn}
+          >
             Start Flow deposit
           </button>
+          <DialogRoot open={flowResult !== null} onOpenChange={(open) => !open && setFlowResult(null)}>
+            <DialogContent
+              title={
+                flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
+                  ? "Flow checkout ready"
+                  : "Flow unavailable — use direct deposit"
+              }
+              description={
+                flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
+                  ? "Dynamic Flow checkout was created. Complete the deposit in the checkout window."
+                  : `Dynamic Flow isn't enabled for this environment${
+                      typeof flowResult?.reason === "string" ? ` (${flowResult.reason})` : ""
+                    }, so no checkout window opened. Use the Blink deposit or sample payroll instead.`
+              }
+            >
+              <div className="facts compact-facts">
+                <span>Status</span>
+                <strong>{String(flowResult?.status ?? "unknown")}</strong>
+                <span>Next step</span>
+                <strong>{String(flowResult?.nextAction ?? "—")}</strong>
+              </div>
+              <JsonBlock value={flowResult} />
+            </DialogContent>
+          </DialogRoot>
         </section>
         <section className="panel stack">
           <h2>Blink Deposit</h2>
