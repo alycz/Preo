@@ -86,7 +86,7 @@ DATABASE_URL=file:./dev.db pnpm prisma:migrate
 pnpm dev
 ```
 
-The app defaults to `DEMO_MODE=true` behavior when live sponsor env vars are absent. In demo mode, Flow falls back to direct testnet funding, Blink signs demo payloads, Canton returns demo contract IDs, and the agent wallet returns clearly simulated transaction hashes.
+The app defaults to `DEMO_MODE=true` behavior when live sponsor env vars are absent. In demo mode, the browser uses a mocked connected Dynamic wallet, Flow falls back to direct testnet funding, Blink signs demo payloads, Canton returns demo contract IDs, and the agent wallet returns clearly simulated transaction hashes.
 
 ## Environment
 
@@ -98,7 +98,7 @@ DATABASE_URL=file:./dev.db
 DEMO_MODE=true
 ```
 
-Live integrations can be enabled by adding Dynamic, Canton, Blink, RPC, USDC, and vault variables from `.env.example`. Do not commit private keys, even burner keys.
+Live integrations can be enabled by adding Dynamic, Canton, Blink, RPC, USDC, and vault variables from `.env.example`. Live Dynamic login requires `DEMO_MODE=false`; when `DEMO_MODE=true`, the client wallet stays mocked even if `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` is populated. Do not commit private keys, even burner keys.
 
 ## One-Hour Deployment Checklist
 
@@ -117,7 +117,7 @@ Live integrations can be enabled by adding Dynamic, Canton, Blink, RPC, USDC, an
 | Integration | Demo-ready | Live-ready when env is added | Check |
 | --- | --- | --- | --- |
 | Canton | yes | `CANTON_JSON_API_URL`, `CANTON_PACKAGE_ID`, optional token/parties | `/api/health/canton`, `pnpm smoke:canton` |
-| Dynamic login | yes | `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | `/api/health/dynamic` |
+| Dynamic login | mocked in `DEMO_MODE=true` | `DEMO_MODE=false`, `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | `/api/health/dynamic` |
 | Dynamic agent wallet | yes | metadata/key shares or `DYNAMIC_AGENT_PRIVATE_KEY` | `pnpm smoke:dynamic` |
 | Dynamic Flow | fallback | `DYNAMIC_ENVIRONMENT_ID`, `DYNAMIC_AUTH_TOKEN`, `DYNAMIC_FLOW_CHECKOUT_ID` | funding page, `/api/health/dynamic` |
 | Blink | yes | `BLINK_MERCHANT_ID`, `BLINK_MERCHANT_PRIVATE_KEY` | `/api/health/blink`, `pnpm smoke:blink` |

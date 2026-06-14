@@ -43,7 +43,7 @@ DATABASE_URL=file:/tmp/preo-demo.db
 DEMO_MODE=true
 ```
 
-For the fastest judged demo, keep optional live integration values empty. The app will show Flow fallback, demo Blink payload signing, demo Canton contract IDs, and simulated Dynamic agent tx hashes. In `DEMO_MODE=true` with `DATABASE_URL=file:/tmp/preo-demo.db`, the API lazily initializes the demo SQLite schema on first use so Vercel serverless functions have a writable database path.
+For the fastest judged demo, keep optional live integration values empty. The app will use a mocked connected Dynamic wallet in the browser, show Flow fallback, demo Blink payload signing, demo Canton contract IDs, and simulated Dynamic agent tx hashes. In `DEMO_MODE=true` with `DATABASE_URL=file:/tmp/preo-demo.db`, the API lazily initializes the demo SQLite schema on first use so Vercel serverless functions have a writable database path.
 
 Database options:
 
@@ -69,6 +69,8 @@ DYNAMIC_WALLET_BACKUP_TO_DYNAMIC=false
 DYNAMIC_AGENT_PRIVATE_KEY=
 LIVE_DYNAMIC_TX=false
 ```
+
+`DEMO_MODE=true` forces the browser wallet connection into mock mode even when `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` is set. Use `DEMO_MODE=false` with a valid `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` to exercise live Dynamic login.
 
 Canton:
 

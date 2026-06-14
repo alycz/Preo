@@ -2,10 +2,11 @@
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
 import { BlinkDepositButton, useBlinkDeposit } from "@swype-org/deposit/react";
-import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import Link from "next/link";
+import nextDynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useAppWallet } from "../wallet-context";
 import {
   approveAction,
   bootstrapMe,
@@ -92,25 +93,23 @@ type Identity = {
   signedIn: boolean;
 };
 
+const LiveDynamicIdentityBridge = nextDynamic(
+  () => import("./LiveDynamicIdentityBridge").then((mod) => mod.LiveDynamicIdentityBridge),
+  { ssr: false }
+);
+
 type AsyncState = {
   busy: boolean;
   error: string;
   message: string;
 };
 
-function getWalletAddress(primaryWallet: unknown): string | undefined {
-  if (!primaryWallet || typeof primaryWallet !== "object") {
-    return undefined;
-  }
-  return (primaryWallet as { address?: string }).address;
-}
-
-const defaultIdentity: Identity = {
-  dynamicConfigured: isDynamicEnvironmentConfigured(),
+const disconnectedIdentity: Identity = {
+  dynamicConfigured: false,
   dynamicUserId: "demo-dynamic-user",
-  signedIn: !isDynamicEnvironmentConfigured()
+  signedIn: true
 };
-const IdentityContext = createContext<Identity>(defaultIdentity);
+const IdentityContext = createContext<Identity>(disconnectedIdentity);
 const IdentitySetterContext = createContext<(identity: Identity) => void>(() => {});
 
 function usePreoIdentity(): Identity {
@@ -118,7 +117,8 @@ function usePreoIdentity(): Identity {
 }
 
 function PreoIdentityProvider({ children }: { children: React.ReactNode }) {
-  const [identity, setIdentity] = useState<Identity>(defaultIdentity);
+  const appWallet = useAppWallet();
+  const [identity, setIdentity] = useState<Identity>(() => getIdentityForWalletMode(appWallet));
   return (
     <IdentityContext.Provider value={identity}>
       <IdentitySetterContext.Provider value={setIdentity}>
@@ -129,19 +129,52 @@ function PreoIdentityProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DynamicIdentityBridge() {
-  const setIdentity = useContext(IdentitySetterContext);
-  const dynamicConfigured = isDynamicEnvironmentConfigured();
+function getIdentityForWalletMode(appWallet: ReturnType<typeof useAppWallet>): Identity {
+  if (appWallet.mode === "mock") {
+    return {
+      dynamicConfigured: false,
+      dynamicUserId: appWallet.mockIdentity.dynamicUserId,
+      walletAddress: appWallet.mockIdentity.walletAddress,
+      email: appWallet.mockIdentity.email,
+      signedIn: true
+    };
+  }
 
-  useEffect(() => {
-    setIdentity({
-      dynamicConfigured,
+  if (appWallet.dynamicConfigured) {
+    return {
+      dynamicConfigured: true,
       dynamicUserId: "demo-dynamic-user",
       walletAddress: undefined,
       email: undefined,
-      signedIn: !dynamicConfigured
-    });
-  }, [dynamicConfigured, setIdentity]);
+      signedIn: false
+    };
+  }
+
+  return disconnectedIdentity;
+}
+
+function DynamicIdentityBridge() {
+  const appWallet = useAppWallet();
+
+  if (appWallet.mode === "live") {
+    return <LiveDynamicIdentityBridgeAdapter />;
+  }
+
+  return <StaticDynamicIdentityBridge appWallet={appWallet} />;
+}
+
+function LiveDynamicIdentityBridgeAdapter() {
+  const setIdentity = useContext(IdentitySetterContext);
+
+  return <LiveDynamicIdentityBridge onIdentity={setIdentity} />;
+}
+
+function StaticDynamicIdentityBridge({ appWallet }: { appWallet: ReturnType<typeof useAppWallet> }) {
+  const setIdentity = useContext(IdentitySetterContext);
+
+  useEffect(() => {
+    setIdentity(getIdentityForWalletMode(appWallet));
+  }, [appWallet, setIdentity]);
 
   return null;
 }
@@ -288,7 +321,7 @@ const marketingNav = [
   { href: "#built", label: "Infrastructure" }
 ];
 
-function MarketingHeader({ dynamicConfigured }: { dynamicConfigured: boolean }) {
+function MarketingHeader() {
   return (
     <header className="app-shell marketing">
       <BrandMark />
@@ -445,16 +478,16 @@ function ContractTable({ contracts, empty = "No visible contracts." }: { contrac
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+  const appWallet = useAppWallet();
   const isMarketing = pathname === "/";
   return (
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
         <PreoIdentityProvider>
           {isMarketing ? (
-            <MarketingHeader dynamicConfigured={dynamicConfigured} />
+            <MarketingHeader />
           ) : (
-            <AppHeader pathname={pathname} dynamicConfigured={dynamicConfigured} />
+            <AppHeader pathname={pathname} dynamicConfigured={appWallet.dynamicConfigured} />
           )}
           {children}
           {isMarketing ? <SiteFooter /> : null}

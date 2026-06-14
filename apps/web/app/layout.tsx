@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { DynamicProvider } from "./providers";
+import { getClientWalletMode, getDynamicEnvironmentId } from "@/lib/dynamic-env";
+import { AppProviders } from "./providers";
 import { AppChrome } from "./ui/product";
 
 const sans = Inter({
@@ -23,12 +24,15 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const walletMode = getClientWalletMode();
+  const dynamicEnvironmentId = walletMode === "live" ? getDynamicEnvironmentId() : undefined;
+
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
-        <DynamicProvider>
+        <AppProviders walletMode={walletMode} dynamicEnvironmentId={dynamicEnvironmentId}>
           <AppChrome>{children}</AppChrome>
-        </DynamicProvider>
+        </AppProviders>
       </body>
     </html>
   );

@@ -1,4 +1,5 @@
 import { createAgentWalletFromEnv, createDynamicFlowConfigFromEnv, getFlowAvailability } from "@preo/dynamic-integration";
+import { getHealthClientWalletMode } from "@/lib/dynamic-env";
 import { canton } from "@/lib/canton";
 import { ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
@@ -44,6 +45,7 @@ export async function GET() {
 
   const dynamic = {
     ok: Boolean(env.DEMO_MODE === "true" || env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || env.DYNAMIC_AGENT_PRIVATE_KEY || env.DYNAMIC_AGENT_WALLET_METADATA_JSON),
+    clientWalletMode: getHealthClientWalletMode(env),
     publicEnvPresent: Boolean(env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID),
     serverEnvPresent: Boolean(env.DYNAMIC_ENVIRONMENT_ID && env.DYNAMIC_AUTH_TOKEN),
     flowUsable: flowAvailability.available,

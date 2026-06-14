@@ -1,4 +1,5 @@
 import { createAgentWalletFromEnv, createDynamicFlowConfigFromEnv, getFlowAvailability } from "@preo/dynamic-integration";
+import { getHealthClientWalletMode } from "@/lib/dynamic-env";
 import { ok } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -25,6 +26,7 @@ export async function GET() {
   }
 
   return ok({
+    clientWalletMode: getHealthClientWalletMode(env),
     dynamicPublicEnvPresent: Boolean(env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID),
     dynamicServerEnvPresent: Boolean(env.DYNAMIC_ENVIRONMENT_ID && env.DYNAMIC_AUTH_TOKEN),
     flowCheckoutIdPresent: Boolean(env.DYNAMIC_FLOW_CHECKOUT_ID),

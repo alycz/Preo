@@ -1,9 +1,9 @@
 "use client";
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
-import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import { useEffect, useMemo, useState } from "react";
 import type { BootstrapResponse, CategoryType, PortfolioModel } from "@preo/shared";
+import { useAppWallet } from "../wallet-context";
 
 type LogEntry = {
   label: string;
@@ -78,9 +78,23 @@ function contractId(value: unknown): string | undefined {
 }
 
 export function Dashboard() {
-  const dynamicConfigured = isDynamicEnvironmentConfigured();
+  const appWallet = useAppWallet();
 
-  if (!dynamicConfigured) {
+  if (appWallet.mode === "mock") {
+    return (
+      <DashboardCore
+        identity={{
+          dynamicConfigured: false,
+          dynamicUserId: appWallet.mockIdentity.dynamicUserId,
+          walletAddress: appWallet.mockIdentity.walletAddress,
+          email: appWallet.mockIdentity.email,
+          signedIn: true
+        }}
+      />
+    );
+  }
+
+  if (!appWallet.dynamicConfigured) {
     return (
       <DashboardCore
         identity={{
@@ -342,7 +356,7 @@ function DashboardCore({ identity }: { identity: Identity }) {
           <p>Privacy-first payroll allocation with Dynamic onboarding, Canton accounting, and agent execution.</p>
         </div>
         <div className="stack">
-          {dynamicConfigured ? <DynamicAuthButton /> : <span className="status warn">Dynamic env missing</span>}
+          {dynamicConfigured || walletAddress ? <DynamicAuthButton /> : <span className="status warn">Dynamic env missing</span>}
           <span className={isSignedIn ? "status ok" : "status warn"}>{statusLabel}</span>
         </div>
       </div>
