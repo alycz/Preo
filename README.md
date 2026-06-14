@@ -207,7 +207,7 @@ Track mapping: [docs/SPONSOR_TRACKS.md](docs/SPONSOR_TRACKS.md).
 
 ## From-Scratch Compliance
 
-Preo was built from scratch during the hackathon. xPrime was strategic inspiration only; no xPrime code, UI assets, repository history, branding, or project-specific implementation were reused. General-purpose SDKs, libraries, starter templates, official sponsor SDKs, and AI coding tools are allowed.
+Preo was built from scratch during the hackathon. xPrime was strategic inspiration only; no xPrime code, UI assets, repository history, branding, or project-specific implementation were reused. General-purpose SDKs, libraries, starter templates, and official sponsor SDKs are allowed.
 
 ## Known Limitations
 
