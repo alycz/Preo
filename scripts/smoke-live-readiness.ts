@@ -48,7 +48,7 @@ rows.push({
     detail: await agentWalletDetail()
   });
 
-const flowMissing = missing(["DYNAMIC_ENVIRONMENT_ID", "DYNAMIC_AUTH_TOKEN", "DYNAMIC_FLOW_CHECKOUT_ID"]);
+const flowMissing = missing(["DYNAMIC_ENVIRONMENT_ID", "DYNAMIC_FLOW_CHECKOUT_ID"]);
 rows.push({
   integration: "Dynamic Flow",
   status: flowMissing.length ? "missing" : "ready",

@@ -119,7 +119,7 @@ Live integrations can be enabled by adding Dynamic, Canton, Blink, RPC, USDC, an
 | Canton | yes | `CANTON_JSON_API_URL`, `CANTON_PACKAGE_ID`, optional token/parties | `/api/health/canton`, `pnpm smoke:canton` |
 | Dynamic login | mocked in `DEMO_MODE=true` | `DEMO_MODE=false`, `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | `/api/health/dynamic` |
 | Dynamic agent wallet | yes | metadata/key shares or `DYNAMIC_AGENT_PRIVATE_KEY` | `pnpm smoke:dynamic` |
-| Dynamic Flow | fallback | `DYNAMIC_ENVIRONMENT_ID`, `DYNAMIC_AUTH_TOKEN`, `DYNAMIC_FLOW_CHECKOUT_ID` | funding page, `/api/health/dynamic` |
+| Dynamic Flow | fallback | `DYNAMIC_ENVIRONMENT_ID`, `DYNAMIC_FLOW_CHECKOUT_ID` | funding page, `/api/health/dynamic` |
 | Blink | yes | `BLINK_MERCHANT_ID`, `BLINK_MERCHANT_PRIVATE_KEY` | `/api/health/blink`, `pnpm smoke:blink` |
 | EVM vault | yes | `SETTLEMENT_RPC_URL`, `TESTNET_USDC_ADDRESS`, `PREO_FUNDING_VAULT_ADDRESS` | `pnpm smoke:evm` |
 

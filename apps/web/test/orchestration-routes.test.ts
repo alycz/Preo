@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 process.env.DEMO_MODE = "true";
 process.env.DATABASE_URL ??= "file:./dev.db";
@@ -121,6 +121,157 @@ describe("backend orchestration routes", () => {
         delete process.env.DYNAMIC_FLOW_CHECKOUT_ID;
       } else {
         process.env.DYNAMIC_FLOW_CHECKOUT_ID = savedEnv.flowCheckoutId;
+      }
+    }
+  });
+
+  it("creates a Dynamic Flow transaction when checkout env is configured", async () => {
+    const { POST } = await import("../app/api/funding/flow/checkout/route");
+    const { prisma } = await import("../lib/prisma");
+    const dynamicUserId = `flow-success-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const savedEnv = {
+      dynamicEnvironmentId: process.env.DYNAMIC_ENVIRONMENT_ID,
+      publicDynamicEnvironmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID,
+      dynamicAuthToken: process.env.DYNAMIC_AUTH_TOKEN,
+      flowCheckoutId: process.env.DYNAMIC_FLOW_CHECKOUT_ID,
+      dynamicApiBaseUrl: process.env.DYNAMIC_API_BASE_URL
+    };
+    const transactionId = `flow_tx_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          sessionToken: "dct_test_session",
+          sessionExpiresAt: "2026-06-14T10:00:00Z",
+          transaction: {
+            id: transactionId
+          }
+        }),
+        { status: 201, headers: { "content-type": "application/json" } }
+      );
+    });
+
+    process.env.DYNAMIC_ENVIRONMENT_ID = "env_123";
+    delete process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+    delete process.env.DYNAMIC_AUTH_TOKEN;
+    process.env.DYNAMIC_FLOW_CHECKOUT_ID = "checkout_123";
+    process.env.DYNAMIC_API_BASE_URL = "https://dynamic.example/api/v0";
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const response = await post(POST as RoutePost, "/api/funding/flow/checkout", {
+        dynamicUserId,
+        amount: "25.00",
+        currency: "USD",
+        purpose: "payroll_deposit"
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.json.status).toBe("awaiting_user_action");
+      expect(response.json.nextAction).toBe("start_dynamic_flow_checkout_in_client");
+      expect(response.json.transactionId).toBe(transactionId);
+      expect(response.json.sessionToken).toBe("dct_test_session");
+      expect(response.json.sessionExpiresAt).toBe("2026-06-14T10:00:00Z");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const intent = await prisma.fundingIntent.findUnique({ where: { id: response.json.fundingIntentId as string } });
+      expect(intent?.status).toBe("awaiting_user_action");
+      expect(intent?.transactionId).toBe(transactionId);
+    } finally {
+      vi.unstubAllGlobals();
+      if (savedEnv.dynamicEnvironmentId === undefined) {
+        delete process.env.DYNAMIC_ENVIRONMENT_ID;
+      } else {
+        process.env.DYNAMIC_ENVIRONMENT_ID = savedEnv.dynamicEnvironmentId;
+      }
+      if (savedEnv.publicDynamicEnvironmentId === undefined) {
+        delete process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+      } else {
+        process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID = savedEnv.publicDynamicEnvironmentId;
+      }
+      if (savedEnv.dynamicAuthToken === undefined) {
+        delete process.env.DYNAMIC_AUTH_TOKEN;
+      } else {
+        process.env.DYNAMIC_AUTH_TOKEN = savedEnv.dynamicAuthToken;
+      }
+      if (savedEnv.flowCheckoutId === undefined) {
+        delete process.env.DYNAMIC_FLOW_CHECKOUT_ID;
+      } else {
+        process.env.DYNAMIC_FLOW_CHECKOUT_ID = savedEnv.flowCheckoutId;
+      }
+      if (savedEnv.dynamicApiBaseUrl === undefined) {
+        delete process.env.DYNAMIC_API_BASE_URL;
+      } else {
+        process.env.DYNAMIC_API_BASE_URL = savedEnv.dynamicApiBaseUrl;
+      }
+    }
+  });
+
+  it("falls back to direct deposit when Dynamic Flow transaction creation returns 404", async () => {
+    const { POST } = await import("../app/api/funding/flow/checkout/route");
+    const { prisma } = await import("../lib/prisma");
+    const dynamicUserId = `flow-404-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const savedEnv = {
+      dynamicEnvironmentId: process.env.DYNAMIC_ENVIRONMENT_ID,
+      publicDynamicEnvironmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID,
+      dynamicAuthToken: process.env.DYNAMIC_AUTH_TOKEN,
+      flowCheckoutId: process.env.DYNAMIC_FLOW_CHECKOUT_ID,
+      dynamicApiBaseUrl: process.env.DYNAMIC_API_BASE_URL
+    };
+
+    process.env.DYNAMIC_ENVIRONMENT_ID = "env_123";
+    delete process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+    delete process.env.DYNAMIC_AUTH_TOKEN;
+    process.env.DYNAMIC_FLOW_CHECKOUT_ID = "checkout_123";
+    process.env.DYNAMIC_API_BASE_URL = "https://dynamic.example/api/v0";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "not found", status: 404 }), { status: 404 })));
+
+    try {
+      const response = await post(POST as RoutePost, "/api/funding/flow/checkout", {
+        dynamicUserId,
+        amount: "25.00",
+        currency: "USD",
+        purpose: "payroll_deposit"
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.json.status).toBe("flow_unavailable_use_direct_deposit");
+      expect(response.json.nextAction).toBe("use_direct_testnet_deposit");
+      expect(response.json.transactionId).toBeNull();
+      expect(response.json.reason).toBe("Dynamic Flow is unavailable for this environment. Use direct testnet deposit.");
+
+      const intent = await prisma.fundingIntent.findUnique({ where: { id: response.json.fundingIntentId as string } });
+      expect(intent?.status).toBe("flow_unavailable_use_direct_deposit");
+      expect(intent?.transactionId).toBeNull();
+      expect(intent?.metadata).toMatchObject({
+        flowStatus: "flow_scaffold_ready",
+        providerDetail: expect.stringContaining("Dynamic Flow checkout API returned 404")
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      if (savedEnv.dynamicEnvironmentId === undefined) {
+        delete process.env.DYNAMIC_ENVIRONMENT_ID;
+      } else {
+        process.env.DYNAMIC_ENVIRONMENT_ID = savedEnv.dynamicEnvironmentId;
+      }
+      if (savedEnv.publicDynamicEnvironmentId === undefined) {
+        delete process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+      } else {
+        process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID = savedEnv.publicDynamicEnvironmentId;
+      }
+      if (savedEnv.dynamicAuthToken === undefined) {
+        delete process.env.DYNAMIC_AUTH_TOKEN;
+      } else {
+        process.env.DYNAMIC_AUTH_TOKEN = savedEnv.dynamicAuthToken;
+      }
+      if (savedEnv.flowCheckoutId === undefined) {
+        delete process.env.DYNAMIC_FLOW_CHECKOUT_ID;
+      } else {
+        process.env.DYNAMIC_FLOW_CHECKOUT_ID = savedEnv.flowCheckoutId;
+      }
+      if (savedEnv.dynamicApiBaseUrl === undefined) {
+        delete process.env.DYNAMIC_API_BASE_URL;
+      } else {
+        process.env.DYNAMIC_API_BASE_URL = savedEnv.dynamicApiBaseUrl;
       }
     }
   });

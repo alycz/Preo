@@ -46,6 +46,12 @@ export async function POST(request: Request) {
     if ("reason" in checkout) {
       metadata.reason = checkout.reason;
     }
+    if ("providerDetail" in checkout && checkout.providerDetail) {
+      metadata.providerDetail = checkout.providerDetail;
+    }
+    if ("sessionExpiresAt" in checkout && checkout.sessionExpiresAt) {
+      metadata.sessionExpiresAt = checkout.sessionExpiresAt;
+    }
 
     const intent = await prisma.fundingIntent.create({
       data: {
@@ -55,7 +61,7 @@ export async function POST(request: Request) {
         transactionId: checkout.transactionId,
         amount: input.amount,
         token: input.currency,
-        status: checkout.status === "flow_transaction_created" ? "awaiting_user_action" : "flow_scaffold_ready",
+        status: checkout.status === "flow_transaction_created" ? "awaiting_user_action" : "flow_unavailable_use_direct_deposit",
         metadata
       }
     });
@@ -67,6 +73,8 @@ export async function POST(request: Request) {
       transactionId: checkout.transactionId,
       status: intent.status,
       nextAction: checkout.nextAction,
+      sessionToken: "sessionToken" in checkout ? checkout.sessionToken : undefined,
+      sessionExpiresAt: "sessionExpiresAt" in checkout ? checkout.sessionExpiresAt : undefined,
       reason: "reason" in checkout ? checkout.reason : undefined
     });
   } catch (error) {

@@ -16,13 +16,15 @@ export type DynamicFlowCheckoutInput = {
 
 export type FlowAvailability =
   | { available: true; checkoutId: string }
-  | { available: false; reason: "missing_checkout_id" | "missing_auth_token" | "missing_environment_id" };
+  | { available: false; reason: "missing_checkout_id" | "missing_environment_id" };
 
 export type DynamicFlowCheckoutResult =
   | {
       status: "flow_transaction_created";
       checkoutId: string;
       transactionId: string;
+      sessionToken?: string;
+      sessionExpiresAt?: string;
       nextAction: "start_dynamic_flow_checkout_in_client";
       raw?: unknown;
     }
@@ -30,16 +32,14 @@ export type DynamicFlowCheckoutResult =
       status: "flow_scaffold_ready";
       checkoutId: string;
       transactionId: null;
-      nextAction: "add Dynamic Flow checkout credentials or use direct testnet deposit";
+      nextAction: "use_direct_testnet_deposit";
       reason: string;
+      providerDetail?: string;
     };
 
 export function getFlowAvailability(config: DynamicFlowConfig): FlowAvailability {
   if (!config.environmentId) {
     return { available: false, reason: "missing_environment_id" };
-  }
-  if (!config.authToken) {
-    return { available: false, reason: "missing_auth_token" };
   }
   if (!config.checkoutId) {
     return { available: false, reason: "missing_checkout_id" };
@@ -69,40 +69,51 @@ export async function createFlowCheckoutTransaction(
     throw new Error(`Dynamic Flow unavailable: ${availability.reason}`);
   }
 
-  // Dynamic Flow checkouts are created server-to-server over REST — there is no
-  // npm package to import. Call the checkout transactions endpoint directly and
-  // fall back to a direct deposit if the API is unreachable or misconfigured.
+  // Existing Flow checkouts can create transactions through the SDK-scoped
+  // endpoint. Checkout management still uses the server auth token elsewhere.
   const baseUrl = (config.apiBaseUrl ?? DEFAULT_DYNAMIC_API_BASE).replace(/\/+$/, "");
-  const url = `${baseUrl}/environments/${config.environmentId}/checkouts/${availability.checkoutId}/transactions`;
+  const url = `${baseUrl}/sdk/${config.environmentId}/checkouts/${availability.checkoutId}/transactions`;
   try {
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${config.authToken}`
+        "content-type": "application/json"
       },
       body: JSON.stringify({
         amount: input.amount,
         currency: input.currency,
-        purpose: input.purpose,
-        userId: input.userId
+        memo: {
+          purpose: input.purpose,
+          userId: input.userId
+        }
       })
     });
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(`Dynamic Flow checkout API returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`);
+      return {
+        status: "flow_scaffold_ready",
+        checkoutId: availability.checkoutId,
+        transactionId: null,
+        nextAction: "use_direct_testnet_deposit",
+        reason: "Dynamic Flow is unavailable for this environment. Use direct testnet deposit.",
+        providerDetail: `Dynamic Flow checkout API returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`
+      };
     }
 
     const raw = (await response.json()) as unknown;
     const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
     const transaction = record.transaction && typeof record.transaction === "object" ? (record.transaction as Record<string, unknown>) : {};
     const transactionId = record.transactionId ?? record.id ?? transaction.id;
+    const sessionToken = typeof record.sessionToken === "string" ? record.sessionToken : undefined;
+    const sessionExpiresAt = typeof record.sessionExpiresAt === "string" ? record.sessionExpiresAt : undefined;
     if (transactionId) {
       return {
         status: "flow_transaction_created",
         checkoutId: availability.checkoutId,
         transactionId: String(transactionId),
+        sessionToken,
+        sessionExpiresAt,
         nextAction: "start_dynamic_flow_checkout_in_client",
         raw
       };
@@ -112,8 +123,9 @@ export async function createFlowCheckoutTransaction(
       status: "flow_scaffold_ready",
       checkoutId: availability.checkoutId,
       transactionId: null,
-      nextAction: "add Dynamic Flow checkout credentials or use direct testnet deposit",
-      reason: error instanceof Error ? error.message : String(error)
+      nextAction: "use_direct_testnet_deposit",
+      reason: "Dynamic Flow is unavailable for this environment. Use direct testnet deposit.",
+      providerDetail: error instanceof Error ? error.message : String(error)
     };
   }
 
@@ -121,7 +133,8 @@ export async function createFlowCheckoutTransaction(
     status: "flow_scaffold_ready",
     checkoutId: availability.checkoutId,
     transactionId: null,
-    nextAction: "add Dynamic Flow checkout credentials or use direct testnet deposit",
-    reason: "Dynamic Flow checkout response did not include a transaction id."
+    nextAction: "use_direct_testnet_deposit",
+    reason: "Dynamic Flow is unavailable for this environment. Use direct testnet deposit.",
+    providerDetail: "Dynamic Flow checkout response did not include a transaction id."
   };
 }

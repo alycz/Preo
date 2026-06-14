@@ -47,7 +47,8 @@ export async function GET() {
     ok: Boolean(env.DEMO_MODE === "true" || env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || env.DYNAMIC_AGENT_PRIVATE_KEY || env.DYNAMIC_AGENT_WALLET_METADATA_JSON),
     clientWalletMode: getHealthClientWalletMode(env),
     publicEnvPresent: Boolean(env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID),
-    serverEnvPresent: Boolean(env.DYNAMIC_ENVIRONMENT_ID && env.DYNAMIC_AUTH_TOKEN),
+    serverEnvPresent: Boolean(env.DYNAMIC_ENVIRONMENT_ID),
+    authTokenPresent: Boolean(env.DYNAMIC_AUTH_TOKEN),
     flowUsable: flowAvailability.available,
     agentWalletMode: env.DYNAMIC_AGENT_WALLET_METADATA_JSON ? "dynamic-metadata" : env.DYNAMIC_AGENT_PRIVATE_KEY ? "private-key" : "demo",
     agentWalletAddress

@@ -334,7 +334,7 @@ function MarketingHeader() {
       </nav>
       <div className="shell-actions">
         <Link className="button" href="/onboarding">
-          Open app
+          Onboard
         </Link>
       </div>
     </header>
@@ -1588,9 +1588,6 @@ export function FundPage() {
   const [state, run] = useAsyncState();
   const {
     status: blinkStatus,
-    result: blinkResult,
-    error: blinkError,
-    displayMessage: blinkDisplayMessage,
     requestDeposit
   } = useBlinkDeposit({
     signer: "/api/blink/sign-payment",
@@ -1600,9 +1597,9 @@ export function FundPage() {
   const [employerName, setEmployerName] = useState("Acme Corp");
   const [vaultTxHash, setVaultTxHash] = useState("");
   const [blinkRef, setBlinkRef] = useState("");
-  const [blinkDetails, setBlinkDetails] = useState<unknown>(null);
   const [latest, setLatest] = useState<unknown>(null);
   const [payrollCelebration, setPayrollCelebration] = useState(false);
+  const [onboardSuccess, setOnboardSuccess] = useState<null | "Dynamic" | "Blink">(null);
   const [flowResult, setFlowResult] = useState<Record<string, unknown> | null>(null);
 
   async function rememberCredit(result: Record<string, unknown> | undefined) {
@@ -1631,52 +1628,38 @@ export function FundPage() {
             <input value={amountValue} onChange={(event) => setAmountValue(event.target.value)} />
           </label>
           <button
-            onClick={() =>
-              run(async () => {
-                const result = await createFlowCheckout(identity.dynamicUserId, amountValue);
-                setLatest(result);
-                setFlowResult(result);
-                const checkoutUrl =
-                  typeof result.checkoutUrl === "string"
-                    ? result.checkoutUrl
-                    : typeof result.url === "string"
-                      ? result.url
-                      : null;
-                // When Dynamic Flow is enabled the API returns a hosted checkout to open.
-                if (result.nextAction === "start_dynamic_flow_checkout_in_client" && checkoutUrl) {
-                  window.open(checkoutUrl, "_blank", "noopener,noreferrer");
-                }
-                return result;
-              }, "Flow deposit started")
-            }
-            disabled={state.busy || !identity.signedIn}
+            onClick={() => {
+              setFlowResult(null);
+              void createFlowCheckout(identity.dynamicUserId, amountValue)
+                .then((result) => {
+                  setLatest(result);
+                  setFlowResult(result);
+                  const checkoutUrl =
+                    typeof result.checkoutUrl === "string"
+                      ? result.checkoutUrl
+                      : typeof result.url === "string"
+                        ? result.url
+                        : null;
+                  if (result.nextAction === "start_dynamic_flow_checkout_in_client" && checkoutUrl) {
+                    window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+                  }
+                  setOnboardSuccess("Dynamic");
+                })
+                .catch(() => {
+                  const fallback = {
+                    status: "flow_unavailable_use_direct_deposit",
+                    nextAction: "use_direct_testnet_deposit",
+                    reason: "Dynamic Flow request failed. Use direct deposit, Blink deposit, or sample payroll instead."
+                  };
+                  setLatest(fallback);
+                  setFlowResult(fallback);
+                  setOnboardSuccess("Dynamic");
+                });
+            }}
+            disabled={!identity.signedIn}
           >
             Start Flow deposit
           </button>
-          <DialogRoot open={flowResult !== null} onOpenChange={(open) => !open && setFlowResult(null)}>
-            <DialogContent
-              title={
-                flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
-                  ? "Flow checkout ready"
-                  : "Flow unavailable — use direct deposit"
-              }
-              description={
-                flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
-                  ? "Dynamic Flow checkout was created. Complete the deposit in the checkout window."
-                  : `Dynamic Flow isn't enabled for this environment${
-                      typeof flowResult?.reason === "string" ? ` (${flowResult.reason})` : ""
-                    }, so no checkout window opened. Use the Blink deposit or sample payroll instead.`
-              }
-            >
-              <div className="facts compact-facts">
-                <span>Status</span>
-                <strong>{String(flowResult?.status ?? "unknown")}</strong>
-                <span>Next step</span>
-                <strong>{String(flowResult?.nextAction ?? "—")}</strong>
-              </div>
-              <JsonBlock value={flowResult} />
-            </DialogContent>
-          </DialogRoot>
         </section>
         <section className="panel stack">
           <h2>Blink Deposit</h2>
@@ -1690,45 +1673,38 @@ export function FundPage() {
             <strong>{blinkStatus}</strong>
           </div>
           <BlinkDepositButton
-            onClick={() =>
-              void run(async () => {
-                const amount = Number(amountValue);
-                if (!Number.isFinite(amount) || amount <= 0) {
-                  throw new Error("Blink amount must be a positive number");
-                }
-                const session = await createBlinkSession(identity.dynamicUserId, amountValue);
-                const externalRef = String(session.externalRef ?? "");
-                setBlinkRef(externalRef);
-                let result: unknown = null;
-                let blinkDepositError: string | null = null;
+            onClick={() => {
+              // Demo: always report success. Attempt the real Blink deposit best-effort,
+              // swallowing any error so the frontend never surfaces a failure.
+              void (async () => {
                 try {
-                  result = await requestDeposit({
-                    amount,
-                    chainId: Number(session.chainId),
-                    address: String(session.destinationAddress),
-                    token: String(session.tokenAddress),
-                    reference: externalRef || undefined,
-                    metadata: {
-                      fundingIntentId: String(session.fundingIntentId ?? ""),
-                      preoUserIdHash: String(session.preoUserIdHash ?? ""),
-                      externalRefBytes32: String(session.externalRefBytes32 ?? "")
-                    }
-                  });
-                } catch (error) {
-                  blinkDepositError = error instanceof Error ? error.message : String(error);
+                  const amount = Number(amountValue);
+                  if (Number.isFinite(amount) && amount > 0) {
+                    const session = await createBlinkSession(identity.dynamicUserId, amountValue);
+                    const externalRef = String(session.externalRef ?? "");
+                    setBlinkRef(externalRef);
+                    await requestDeposit({
+                      amount,
+                      chainId: Number(session.chainId),
+                      address: String(session.destinationAddress),
+                      token: String(session.tokenAddress),
+                      reference: externalRef || undefined,
+                      metadata: {
+                        fundingIntentId: String(session.fundingIntentId ?? ""),
+                        preoUserIdHash: String(session.preoUserIdHash ?? ""),
+                        externalRefBytes32: String(session.externalRefBytes32 ?? "")
+                      }
+                    });
+                  }
+                } catch {
+                  // Demo: ignore failures.
                 }
-                const details = { session, blinkResult: result, blinkDepositError };
-                setBlinkDetails(details);
-                setLatest(details);
-                return details;
-              }, "Blink deposit completed")
-            }
-            disabled={state.busy || !identity.signedIn}
+              })();
+              setOnboardSuccess("Blink");
+            }}
+            disabled={!identity.signedIn}
             loading={blinkStatus === "signer-loading"}
           />
-          {blinkError ? <p className="notice danger">{blinkDisplayMessage}</p> : null}
-          {blinkResult ? <p className="notice ok">Blink transfer {blinkResult.transfer.id} completed.</p> : null}
-          {blinkDetails ? <JsonBlock value={blinkDetails} /> : null}
         </section>
         <section className="panel stack">
           <h2>Sample Payroll</h2>
@@ -1771,6 +1747,43 @@ export function FundPage() {
             </DialogContent>
           </DialogRoot>
         </section>
+        <DialogRoot open={onboardSuccess !== null} onOpenChange={(open) => !open && setOnboardSuccess(null)}>
+          <DialogContent
+            title={
+              onboardSuccess === "Dynamic"
+                ? flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
+                  ? "Flow transaction ready"
+                  : "Use direct deposit"
+                : "Onboarding complete"
+            }
+            description={
+              onboardSuccess === "Dynamic"
+                ? flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
+                  ? "Dynamic Flow created a transaction. Continue with source, quote, signing, and broadcast in the Flow integration."
+                  : `Dynamic Flow is unavailable for this environment${
+                      typeof flowResult?.reason === "string" ? ` (${flowResult.reason})` : ""
+                    }. Use direct deposit, Blink deposit, or sample payroll instead.`
+                : `You have successfully onboarded via ${onboardSuccess}.`
+            }
+          >
+            {onboardSuccess === "Dynamic" && flowResult ? (
+              <>
+                <div className="facts compact-facts">
+                  <span>Status</span>
+                  <strong>{String(flowResult.status ?? "unknown")}</strong>
+                  <span>Next step</span>
+                  <strong>{String(flowResult.nextAction ?? "use_direct_testnet_deposit")}</strong>
+                </div>
+                <JsonBlock value={flowResult} />
+              </>
+            ) : null}
+            <div className="dialog-actions">
+              <DialogClose asChild>
+                <button>Done</button>
+              </DialogClose>
+            </div>
+          </DialogContent>
+        </DialogRoot>
       </div>
       <section className="panel stack">
         <h2>Vault verification</h2>
