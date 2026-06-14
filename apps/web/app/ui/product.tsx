@@ -2,6 +2,7 @@
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
 import { BlinkDepositButton, useBlinkDeposit } from "@swype-org/deposit/react";
+import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -101,9 +102,9 @@ function getWalletAddress(primaryWallet: unknown): string | undefined {
 }
 
 const defaultIdentity: Identity = {
-  dynamicConfigured: Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID),
+  dynamicConfigured: isDynamicEnvironmentConfigured(),
   dynamicUserId: "demo-dynamic-user",
-  signedIn: !process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID
+  signedIn: !isDynamicEnvironmentConfigured()
 };
 const IdentityContext = createContext<Identity>(defaultIdentity);
 const IdentitySetterContext = createContext<(identity: Identity) => void>(() => {});
@@ -126,7 +127,7 @@ function PreoIdentityProvider({ children }: { children: React.ReactNode }) {
 
 function DynamicIdentityBridge() {
   const setIdentity = useContext(IdentitySetterContext);
-  const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+  const dynamicConfigured = isDynamicEnvironmentConfigured();
 
   useEffect(() => {
     setIdentity({
@@ -297,7 +298,7 @@ function IdentityPanel({ identity }: { identity: Identity }) {
 
 function DeploymentBanner() {
   const demoMode = process.env.DEMO_MODE === "true";
-  const livePublicEnvPresent = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || process.env.NEXT_PUBLIC_BLINK_MERCHANT_ID);
+  const livePublicEnvPresent = Boolean(isDynamicEnvironmentConfigured() || process.env.NEXT_PUBLIC_BLINK_MERCHANT_ID);
   return (
     <div className={`deployment-banner ${demoMode || !livePublicEnvPresent ? "demo" : "live"}`}>
       {demoMode || !livePublicEnvPresent
@@ -309,7 +310,7 @@ function DeploymentBanner() {
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+  const dynamicConfigured = isDynamicEnvironmentConfigured();
   return (
     <PreoIdentityProvider>
       <header className="app-shell">

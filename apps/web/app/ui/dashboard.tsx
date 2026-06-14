@@ -1,6 +1,7 @@
 "use client";
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
+import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import { useEffect, useMemo, useState } from "react";
 import type { BootstrapResponse, CategoryType, PortfolioModel } from "@preo/shared";
 
@@ -77,7 +78,7 @@ function contractId(value: unknown): string | undefined {
 }
 
 export function Dashboard() {
-  const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+  const dynamicConfigured = isDynamicEnvironmentConfigured();
 
   if (!dynamicConfigured) {
     return (
