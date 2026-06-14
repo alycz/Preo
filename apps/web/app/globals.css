@@ -462,11 +462,16 @@ nav a.active {
   font-size: var(--text-hero);
   letter-spacing: -0.03em;
   line-height: 1.06;
-  max-width: 18ch;
+  max-width: 24ch;
 }
 
+.hero-copy h1 .line,
 .hero-copy h1 .dim {
   display: block;
+}
+
+.hero-copy h1 .line {
+  white-space: nowrap;
 }
 
 .hero-copy p,
@@ -804,6 +809,17 @@ nav a.active {
   gap: var(--space-3);
 }
 
+/* In equal-height grid cells, keep stacked content top-aligned so the last
+   element (often a button) stays its natural height instead of stretching. */
+.grid > .panel.stack {
+  align-content: start;
+}
+
+/* Vertical rhythm between stacked top-level page containers. */
+.page-stack > * + * {
+  margin-top: var(--space-6);
+}
+
 .row.wrap {
   flex-wrap: wrap;
 }
@@ -962,6 +978,27 @@ tbody tr:hover {
   min-width: 560px;
 }
 
+/* Compact runs table — fits inside a half-width grid column without scrolling */
+.table-wrap.compact {
+  overflow-x: hidden;
+}
+
+.table-wrap.compact table {
+  min-width: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.table-wrap.compact th,
+.table-wrap.compact td {
+  padding: var(--space-3) var(--space-2);
+}
+
+.table-wrap.compact th.col-center,
+.table-wrap.compact td.col-center {
+  text-align: center;
+}
+
 /* =========================== Cards / list items =========================== */
 
 .category-list,
@@ -1008,6 +1045,15 @@ tbody tr:hover {
 .mini-card strong {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+
+.portfolio-card {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.portfolio-card strong {
+  font-size: var(--text-lg);
+  letter-spacing: -0.02em;
 }
 
 .approval-card {
@@ -2124,9 +2170,10 @@ html {
 .agentic {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(300px, 320px) 1fr;
+  grid-template-columns: minmax(230px, 250px) auto;
+  justify-content: center;
   align-items: stretch;
-  gap: var(--space-7);
+  gap: 0;
   border: 1px solid var(--line);
   background: var(--surface-1);
   padding: var(--space-8) var(--space-7);
@@ -2143,7 +2190,7 @@ html {
 }
 
 .agentic-source {
-  align-self: center;
+  align-self: stretch;
   align-content: start;
 }
 
@@ -2308,16 +2355,36 @@ html {
 /* ---- Three-tier flow (Agent -> category -> granular) ---- */
 
 .agentic-flow {
+  position: relative;
   display: grid;
   gap: var(--space-4);
   align-content: center;
 }
 
+/* Vertical spine that ties all four trunk lines back to the Paycheck box */
+.agentic-flow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: var(--line);
+  transition: background var(--dur) var(--ease);
+}
+
+.agentic.phase-split .agentic-flow::before,
+.agentic.phase-distribute .agentic-flow::before,
+.agentic.phase-done .agentic-flow::before,
+.agentic.is-static .agentic-flow::before {
+  background: var(--accent-soft);
+}
+
 .agentic-branch {
   display: grid;
-  grid-template-columns: var(--space-7) 200px var(--space-6) 1fr;
+  grid-template-columns: var(--space-9) 200px var(--space-8) minmax(0, 360px);
   align-items: center;
-  margin-left: calc(-1 * var(--space-7));
+  margin-left: 0;
 }
 
 .agentic-trunk,
@@ -2353,7 +2420,7 @@ html {
 .agentic.phase-split .agentic-trunk::after,
 .agentic.phase-distribute .agentic-twigs::after {
   opacity: 1;
-  animation: agentic-flow 1.4s var(--ease) infinite;
+  animation: agentic-flow 2.4s var(--ease) infinite;
 }
 
 .agentic .branch-1 .agentic-trunk::after {

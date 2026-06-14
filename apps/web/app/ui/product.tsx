@@ -10,7 +10,6 @@ import {
   approveAction,
   bootstrapMe,
   createBlinkSession,
-  createDirectDeposit,
   createFlowCheckout,
   executeApprovedAction,
   getAgentActions,
@@ -24,7 +23,6 @@ import {
   runAllocation,
   runDemoFullFlow,
   savePolicy,
-  sendDemoPayroll,
   validatePolicy,
   verifyVaultDeposit,
   type ApiValidationResult,
@@ -384,7 +382,7 @@ function SiteFooter() {
         <div className="footer-grid">
           <div className="footer-brand">
             <BrandMark />
-            <p>Receive stablecoin payroll and route it into private, user-defined categories — automatically.</p>
+            <p>Receive stablecoin payroll and route it into private, user-defined categories, automatically.</p>
           </div>
           <div className="footer-col">
             <h4>Product</h4>
@@ -471,7 +469,7 @@ const HERO_SALARY = 2500;
 const privacyProblems = [
   {
     title: "Your employer sees everything",
-    body: "Traditional payroll routes through whoever signs your check. Your raises, your savings, the accounts your money touches — all visible upstream."
+    body: "Traditional payroll routes through whoever signs your check. Your raises, your savings, the accounts your money touches: all visible upstream."
   },
   {
     title: "Your bank sees your strategy",
@@ -515,7 +513,7 @@ const howItWorks = [
   },
   {
     title: "Set your split once",
-    body: "Define categories — rent, savings, investing — as percentages that always add up to 100%."
+    body: "Define categories (rent, savings, investing) as percentages that always add up to 100%."
   },
   {
     title: "The agent allocates each paycheck",
@@ -873,11 +871,11 @@ function FlowVisual({ step }: { step: number }) {
 
 type AllocPhase = "arrive" | "think" | "split" | "distribute" | "done";
 const ALLOC_PHASE_MS: Record<AllocPhase, number> = {
-  arrive: 1800,
-  think: 1800,
-  split: 2300,
-  distribute: 2600,
-  done: 1500
+  arrive: 1200,
+  think: 1300,
+  split: 2500,
+  distribute: 2500,
+  done: 2500
 };
 const ALLOC_NEXT: Record<AllocPhase, AllocPhase> = {
   arrive: "think",
@@ -1151,13 +1149,16 @@ export function LandingPage() {
     <main>
       <section className="hero">
         <div className="hero-copy">
-          <span className="kicker">Privacy-first agentic payroll · On-chain · Canton</span>
+          <span className="kicker">Privacy-first agentic neobank · On-chain · Automatic paycheck allocation</span>
           <h1>
-            Your paycheck, allocated automatically.<span className="dim"> No one sees how.</span>
+            <span className="line">Your paycheck,</span>
+            <span className="line">allocated automatically.</span>
+            <span className="dim">No one sees how.</span>
           </h1>
           <p className="hero-lede">
-            Receive stablecoin payroll and route it into private, user-defined categories. Your employer can&rsquo;t see
-            your investments. Your landlord can&rsquo;t see your salary. Everyone else sees nothing.
+            Preo is the privacy-first neobank that allocates your paycheck automatically. Receive stablecoin payroll
+            and route it into private, user-defined categories. Your employer can&rsquo;t see your investments. Your
+            landlord can&rsquo;t see your salary. Everyone else sees nothing.
           </p>
           <div className="hero-actions">
             <Link className="button" href="/privacy-demo">
@@ -1568,6 +1569,7 @@ export function FundPage() {
   const [blinkRef, setBlinkRef] = useState("");
   const [blinkDetails, setBlinkDetails] = useState<unknown>(null);
   const [latest, setLatest] = useState<unknown>(null);
+  const [payrollCelebration, setPayrollCelebration] = useState(false);
 
   async function rememberCredit(result: Record<string, unknown> | undefined) {
     if (typeof result?.cantonCreditContractId === "string") {
@@ -1577,7 +1579,7 @@ export function FundPage() {
   }
 
   return (
-    <main>
+    <main className="page-stack">
       <PageHeader eyebrow="Payroll" title="Get salary into Preo">
         Fund your account with Dynamic Flow, Blink, or a sample payroll deposit.
       </PageHeader>
@@ -1599,7 +1601,7 @@ export function FundPage() {
           </button>
         </section>
         <section className="panel stack">
-          <h2>Blink deposit</h2>
+          <h2>Blink Deposit</h2>
           <p className="muted">Blink funds your account in one tap through the server-side signer path.</p>
           <div className="facts compact-facts">
             <span>Signer</span>
@@ -1645,17 +1647,39 @@ export function FundPage() {
           {blinkDetails ? <JsonBlock value={blinkDetails} /> : null}
         </section>
         <section className="panel stack">
-          <h2>Sample payroll</h2>
+          <h2>Sample Payroll</h2>
+          <p className="muted">Simulate an employer payroll deposit so you can preview how salary lands privately in Preo.</p>
+          <div className="facts compact-facts">
+            <span>Status</span>
+            <strong>Demo payroll</strong>
+          </div>
           <label className="field">
             <span>Employer name</span>
             <input value={employerName} onChange={(event) => setEmployerName(event.target.value)} />
           </label>
-          <button onClick={() => run(() => sendDemoPayroll(identity.dynamicUserId, amountValue, employerName).then((result) => (rememberCredit(result), result)), "Payroll sent")} disabled={state.busy || !identity.signedIn}>
-            Send sample payroll
+          <button onClick={() => setPayrollCelebration(true)} disabled={!identity.signedIn}>
+            Receive payroll
           </button>
-          <button className="secondary" onClick={() => run(() => createDirectDeposit(identity.dynamicUserId, amountValue).then((result) => (rememberCredit(result), result)), "Direct deposit credited")} disabled={state.busy || !identity.signedIn}>
-            Direct deposit
-          </button>
+          <DialogRoot open={payrollCelebration} onOpenChange={setPayrollCelebration}>
+            <DialogContent
+              title="🎉 Payroll received"
+              description={`Congratulations! Your payroll from ${employerName} was deposited to Preo.`}
+            >
+              <div className="facts compact-facts">
+                <span>Amount</span>
+                <strong>{amount(Number(amountValue))} USDC</strong>
+                <span>Employer</span>
+                <strong>{employerName}</strong>
+                <span>Status</span>
+                <strong>Deposited to Preo</strong>
+              </div>
+              <div className="dialog-actions">
+                <DialogClose asChild>
+                  <button>Done</button>
+                </DialogClose>
+              </div>
+            </DialogContent>
+          </DialogRoot>
         </section>
       </div>
       <section className="panel stack">
@@ -1706,13 +1730,13 @@ export function DashboardPage() {
         </section>
         <section className="panel stack">
           <h2>Active policy allocation runs</h2>
-          <div className="table-wrap">
+          <div className="table-wrap compact">
             <table>
               <thead>
                 <tr>
                   <th>Run</th>
                   <th>Amount</th>
-                  <th>Categories</th>
+                  <th className="col-center">Categories</th>
                   <th>When</th>
                   <th>Status</th>
                 </tr>
@@ -1722,7 +1746,7 @@ export function DashboardPage() {
                   <tr key={runItem.runId}>
                     <td className="code">{runItem.runId}</td>
                     <td className="num">{amount(runItem.amount)} USDC</td>
-                    <td>{runItem.categories}</td>
+                    <td className="col-center">{runItem.categories}</td>
                     <td>{runItem.when}</td>
                     <td>
                       <StatusPill tone="ok">{runItem.status}</StatusPill>
@@ -1805,13 +1829,13 @@ export function PortfolioPage() {
       </div>
       <div className="card-list">
         {SIM_PORTFOLIO.map((item) => (
-          <article className="mini-card" key={item.id}>
+          <article className="mini-card portfolio-card" key={item.id}>
             <div>
               <h3>{item.label}</h3>
               <p>{item.model}</p>
             </div>
+            <span className="code">Run {item.runId.replace(/^run-/, "")}</span>
             <strong>{amount(item.amount)} USDC</strong>
-            <span className="code">{item.runId}</span>
             <StatusPill tone="ok">Private on Canton</StatusPill>
           </article>
         ))}
@@ -1825,7 +1849,7 @@ export function PrivacyDemoPage() {
   const sim = SIM_PARTY_VIEW[role];
   const visibility = roleVisibility[role];
   return (
-    <main>
+    <main className="page-stack">
       <PageHeader eyebrow="Privacy" title="Switch Canton party perspectives">
         Canton lets Preo model salary as private multi-party state. Each party only sees contracts where they are a stakeholder.
       </PageHeader>
