@@ -241,11 +241,19 @@ function DashboardCore({ identity }: { identity: Identity }) {
       setLastBlinkRef(session.externalRef);
     }
     await postJson("/api/blink/sign-payment", {
-      amount,
+      amount: Number(amount),
       chainId: session.chainId,
       address: session.destinationAddress,
       token: session.tokenAddress,
-      callbackScheme: null
+      callbackScheme: null,
+      url: "https://pay-sandbox.blink.cash",
+      version: "v1",
+      reference: session.externalRef,
+      metadata: session.externalRef
+        ? {
+            externalRef: session.externalRef
+          }
+        : undefined
     });
   }
 
@@ -499,4 +507,3 @@ function DashboardCore({ identity }: { identity: Identity }) {
     </main>
   );
 }
-

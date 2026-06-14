@@ -1,6 +1,7 @@
 "use client";
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
+import { BlinkDepositButton, useBlinkDeposit } from "@swype-org/deposit/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -23,7 +24,6 @@ import {
   runDemoFullFlow,
   savePolicy,
   sendDemoPayroll,
-  signBlinkPayment,
   validatePolicy,
   verifyVaultDeposit,
   type ApiValidationResult,
@@ -713,6 +713,16 @@ export function FundPage() {
   const identity = usePreoIdentity();
   const saved = useSavedDemoState();
   const [state, run] = useAsyncState();
+  const {
+    status: blinkStatus,
+    result: blinkResult,
+    error: blinkError,
+    displayMessage: blinkDisplayMessage,
+    requestDeposit
+  } = useBlinkDeposit({
+    signer: "/api/blink/sign-payment",
+    environment: "sandbox"
+  });
   const [amountValue, setAmountValue] = useState("2500.00");
   const [employerName, setEmployerName] = useState("Demo Employer");
   const [vaultTxHash, setVaultTxHash] = useState("");
@@ -757,30 +767,42 @@ export function FundPage() {
             <strong>/api/blink/sign-payment</strong>
             <span>Ref</span>
             <strong className="code">{blinkRef || "Pending"}</strong>
+            <span>Status</span>
+            <strong>{blinkStatus}</strong>
           </div>
-          <button
-            className="secondary"
+          <BlinkDepositButton
             onClick={() =>
-              run(async () => {
+              void run(async () => {
+                const amount = Number(amountValue);
+                if (!Number.isFinite(amount) || amount <= 0) {
+                  throw new Error("Blink amount must be a positive number");
+                }
                 const session = await createBlinkSession(identity.dynamicUserId, amountValue);
-                setBlinkRef(String(session.externalRef ?? ""));
-                const signed = await signBlinkPayment({
-                  amount: amountValue,
-                  chainId: session.chainId,
-                  address: session.destinationAddress,
-                  token: session.tokenAddress,
-                  callbackScheme: null
+                const externalRef = String(session.externalRef ?? "");
+                setBlinkRef(externalRef);
+                const result = await requestDeposit({
+                  amount,
+                  chainId: Number(session.chainId),
+                  address: String(session.destinationAddress),
+                  token: String(session.tokenAddress),
+                  reference: externalRef || undefined,
+                  metadata: {
+                    fundingIntentId: String(session.fundingIntentId ?? ""),
+                    preoUserIdHash: String(session.preoUserIdHash ?? ""),
+                    externalRefBytes32: String(session.externalRefBytes32 ?? "")
+                  }
                 });
-                const details = { session, signedPayloadPreview: signed.preview ?? signed };
+                const details = { session, blinkResult: result };
                 setBlinkDetails(details);
                 setLatest(details);
                 return details;
-              }, "Blink deposit prepared")
+              }, "Blink deposit completed")
             }
             disabled={state.busy || !identity.signedIn}
-          >
-            Prepare Blink deposit
-          </button>
+            loading={blinkStatus === "signer-loading"}
+          />
+          {blinkError ? <p className="notice danger">{blinkDisplayMessage}</p> : null}
+          {blinkResult ? <p className="notice ok">Blink transfer {blinkResult.transfer.id} completed.</p> : null}
           {blinkDetails ? <JsonBlock value={blinkDetails} /> : null}
         </section>
         <section className="panel stack">
