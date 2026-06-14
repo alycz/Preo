@@ -1,6 +1,6 @@
 "use client";
 
-import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
+import dynamic from "next/dynamic";
 import { type ReactNode } from "react";
 import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import { useDynamicReady } from "@/app/providers";
@@ -16,6 +16,11 @@ function DynamicLoadingButton() {
     </button>
   );
 }
+
+const DynamicWidget = dynamic(() => import("@dynamic-labs/sdk-react-core").then((mod) => mod.DynamicWidget), {
+  ssr: false,
+  loading: DynamicLoadingButton
+});
 
 export function DynamicAuthButton() {
   const ready = useDynamicReady();
