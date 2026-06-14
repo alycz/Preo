@@ -1,9 +1,13 @@
 "use client";
 
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
-import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
+import { DynamicContextProvider, DynamicWidgetContextProvider } from "@dynamic-labs/sdk-react-core";
 import { getDynamicEnvironmentId } from "@/lib/dynamic-env";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+
+const DynamicReadyContext = createContext(false);
+
+export const useDynamicReady = () => useContext(DynamicReadyContext);
 
 export function DynamicProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -14,7 +18,7 @@ export function DynamicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (!environmentId || !mounted) {
-    return <>{children}</>;
+    return <DynamicReadyContext.Provider value={false}>{children}</DynamicReadyContext.Provider>;
   }
 
   return (
@@ -24,7 +28,9 @@ export function DynamicProvider({ children }: { children: React.ReactNode }) {
         walletConnectors: [EthereumWalletConnectors]
       }}
     >
-      {children}
+      <DynamicWidgetContextProvider>
+        <DynamicReadyContext.Provider value={true}>{children}</DynamicReadyContext.Provider>
+      </DynamicWidgetContextProvider>
     </DynamicContextProvider>
   );
 }

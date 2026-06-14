@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
+import { type ReactNode } from "react";
 import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
+import { useDynamicReady } from "@/app/providers";
 
 function DynamicFallback({ children = "Dynamic env missing" }: { children?: ReactNode }) {
   return <span className="status warn">{children}</span>;
@@ -16,27 +18,13 @@ function DynamicLoadingButton() {
 }
 
 export function DynamicAuthButton() {
-  const [DynamicWidget, setDynamicWidget] = useState<ComponentType | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    void import("@dynamic-labs/sdk-react-core").then((mod) => {
-      if (active) {
-        setDynamicWidget(() => mod.DynamicWidget);
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const ready = useDynamicReady();
 
   if (!isDynamicEnvironmentConfigured()) {
     return <DynamicFallback />;
   }
 
-  if (!DynamicWidget) {
+  if (!ready) {
     return <DynamicLoadingButton />;
   }
 
