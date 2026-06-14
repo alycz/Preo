@@ -17,7 +17,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Preo — Private payroll, allocated automatically",
+  title: "Preo: Private payroll, allocated automatically",
   description:
     "Receive stablecoin payroll and automatically route it into private, user-defined financial categories. Your employer can't see your investments. Built on Canton."
 };
