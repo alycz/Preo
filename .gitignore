@@ -8,3 +8,4 @@ apps/web/prisma/dev.db*
 apps/web/dev.db*
 .next/
 node_modules/
+.gstack/
