@@ -2,6 +2,7 @@
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
 import { BlinkDepositButton, useBlinkDeposit } from "@swype-org/deposit/react";
+import { isDynamicEnvironmentConfigured } from "@/lib/dynamic-env";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -107,9 +108,9 @@ function getWalletAddress(primaryWallet: unknown): string | undefined {
 }
 
 const defaultIdentity: Identity = {
-  dynamicConfigured: Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID),
+  dynamicConfigured: isDynamicEnvironmentConfigured(),
   dynamicUserId: "demo-dynamic-user",
-  signedIn: !process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID
+  signedIn: !isDynamicEnvironmentConfigured()
 };
 const IdentityContext = createContext<Identity>(defaultIdentity);
 const IdentitySetterContext = createContext<(identity: Identity) => void>(() => {});
@@ -132,7 +133,7 @@ function PreoIdentityProvider({ children }: { children: React.ReactNode }) {
 
 function DynamicIdentityBridge() {
   const setIdentity = useContext(IdentitySetterContext);
-  const dynamicConfigured = Boolean(process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID);
+  const dynamicConfigured = isDynamicEnvironmentConfigured();
 
   useEffect(() => {
     setIdentity({
