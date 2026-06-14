@@ -17,6 +17,18 @@ export const amountStringSchema = z
   .regex(/^\d+(\.\d{1,6})?$/, "expected a positive decimal amount")
   .refine((value) => Number(value) > 0, "amount must be positive");
 
+export const amountNumberSchema = z
+  .number()
+  .finite()
+  .positive("amount must be positive");
+
+const callbackSchemeSchema = z
+  .union([
+    z.null(),
+    z.string().regex(/^[a-zA-Z][a-zA-Z0-9+\-.]*$/, "expected a valid callback URL scheme")
+  ])
+  .default(null);
+
 export const bootstrapRequestSchema = z.object({
   dynamicUserId: z.string().min(1),
   primaryWalletAddress: optionalHexAddressSchema,
@@ -53,11 +65,15 @@ export const blinkSessionRequestSchema = z.object({
 });
 
 export const blinkSignPaymentRequestSchema = z.object({
-  amount: amountStringSchema,
+  amount: amountNumberSchema,
   chainId: z.number().int().positive(),
   address: hexAddressSchema,
   token: hexAddressSchema,
-  callbackScheme: z.null().optional()
+  callbackScheme: callbackSchemeSchema,
+  url: z.string().url().default("https://pay-sandbox.blink.cash"),
+  version: z.string().trim().min(1).default("v1"),
+  reference: z.string().trim().min(1).optional(),
+  metadata: z.record(z.string(), z.string()).optional()
 });
 
 export const evmVerifyDepositRequestSchema = z.object({

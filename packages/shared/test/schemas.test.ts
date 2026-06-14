@@ -21,11 +21,15 @@ describe("shared schemas", () => {
   it("validates Blink signer and EVM verification inputs", () => {
     expect(
       blinkSignPaymentRequestSchema.parse({
-        amount: "25.00",
+        amount: 25,
         chainId: 84532,
         address: "0x0000000000000000000000000000000000000001",
         token: "0x0000000000000000000000000000000000000002",
-        callbackScheme: null
+        callbackScheme: null,
+        url: "https://pay-sandbox.blink.cash",
+        version: "v1",
+        reference: "order-123",
+        metadata: { invoiceId: "INV-456" }
       }).callbackScheme
     ).toBeNull();
 

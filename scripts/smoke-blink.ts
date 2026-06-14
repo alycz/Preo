@@ -17,11 +17,15 @@ if (missing.length) {
 
 const signed = createBlinkSignedPayload(
   {
-    amount: "25.00",
+    amount: 25,
     chainId: config.chainId,
     address: config.vaultAddress,
     token: config.tokenAddress,
-    callbackScheme: null
+    callbackScheme: null,
+    url: "https://pay-sandbox.blink.cash",
+    version: "v1",
+    reference: "smoke-blink",
+    metadata: { source: "root-smoke" }
   },
   {
     merchantId: env.BLINK_MERCHANT_ID,

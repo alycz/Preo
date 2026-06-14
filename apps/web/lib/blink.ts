@@ -7,7 +7,7 @@ export type BlinkSignedPayload = {
   payload: string;
   signature: string;
   preview: {
-    amount: string;
+    amount: number;
     chainId: number;
     address: string;
     token: string;
@@ -55,14 +55,16 @@ export function createBlinkSignedPayload(
 
   const signatureTimestamp = (options.now ?? new Date()).toISOString();
   const payloadObject = {
-    merchantId,
     amount: input.amount,
     chainId: input.chainId,
     address: input.address,
     token: input.token,
     callbackScheme: input.callbackScheme ?? null,
     idempotencyKey: options.idempotencyKey ?? randomUUID(),
-    signatureTimestamp
+    signatureTimestamp,
+    version: input.version,
+    ...(input.reference ? { reference: input.reference } : {}),
+    ...(input.metadata ? { metadata: input.metadata } : {})
   };
   const payload = base64url(JSON.stringify(payloadObject));
   const privateKey = privateKeyFromOptions(options);
