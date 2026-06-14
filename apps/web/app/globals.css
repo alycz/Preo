@@ -650,6 +650,10 @@ nav a.active {
   margin-bottom: 0;
 }
 
+.nowrap-copy {
+  white-space: nowrap;
+}
+
 /* ---- Numbered hairline rows (problem list + how it works) ---- */
 
 .num-rows {
@@ -811,6 +815,10 @@ nav a.active {
 
 .grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.policy-support-grid {
+  margin-top: var(--space-5);
 }
 
 .dashboard-row {

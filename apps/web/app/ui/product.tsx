@@ -1417,7 +1417,7 @@ export function PolicyBuilderPage() {
   return (
     <main>
       <PageHeader eyebrow="Policy Builder" title="Build a Custom Payroll Policy">
-        Start from a blank policy or use the example as a template. Percentages must add to exactly 100%.
+        <span className="nowrap-copy">Start from a blank policy or use the example as a template. Percentages must add to exactly 100%.</span>
       </PageHeader>
       <Notice state={state} />
       <section className="panel stack">
@@ -1444,9 +1444,9 @@ export function PolicyBuilderPage() {
         </div>
       </section>
 
-      <div className="grid two">
+      <div className="grid two policy-support-grid">
         <section className="panel stack">
-          <h2>Approval rules</h2>
+          <h2>Approval Rules</h2>
           <Switch label="Ask before new recipient" checked={approvalSettings.newRecipient} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, newRecipient: value }))} />
           <Switch label="Ask before investments" checked={approvalSettings.investments} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, investments: value }))} />
           <Switch label="Ask before transfer above amount" checked={approvalSettings.largeTransfer} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, largeTransfer: value }))} />
@@ -1459,7 +1459,7 @@ export function PolicyBuilderPage() {
           <Switch label="Ask before external withdrawal" checked={approvalSettings.externalWithdrawal} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, externalWithdrawal: value }))} />
         </section>
         <section className="panel stack">
-          <h2>Preview allocation</h2>
+          <h2>Preview Allocation</h2>
           <label className="field">
             <span>Hypothetical payroll amount</span>
             <input value={previewAmount} onChange={(event) => setPreviewAmount(event.target.value)} inputMode="decimal" />
@@ -1851,7 +1851,7 @@ export function ApprovalsPage() {
   return (
     <main>
       <PageHeader eyebrow="Agent" title="Agentic Allocation">
-        Watch the agent accept a paycheck and split it across your private categories — automatically, by the policy you set.
+        <span className="nowrap-copy">Watch the agent accept a paycheck and split it across your private categories — automatically, by the policy you set.</span>
       </PageHeader>
       <AgenticAllocation />
       <div className="grid three agentic-explainers">
