@@ -9,3 +9,4 @@ apps/web/dev.db*
 .next/
 node_modules/
 .gstack/
+*.tsbuildinfo
