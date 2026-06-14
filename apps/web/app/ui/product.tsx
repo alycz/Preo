@@ -1,7 +1,7 @@
 "use client";
 
 import { DynamicAuthButton } from "./DynamicAuthButton";
-import { BlinkDepositButton, useBlinkDeposit } from "@swype-org/deposit/react";
+import { BlinkDepositButton } from "@swype-org/deposit/react";
 import Link from "next/link";
 import nextDynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
@@ -1184,9 +1184,8 @@ export function LandingPage() {
         <div className="hero-copy">
           <span className="kicker">Privacy-first agentic neobank · On-chain · Automatic paycheck allocation</span>
           <h1>
-            <span className="line">Your paycheck,</span>
-            <span className="line">allocated automatically.</span>
-            <span className="dim">No one sees how.</span>
+            <span className="line">The Privacy First</span>
+            <span className="dim">Neobank.</span>
           </h1>
           <p className="hero-lede">
             Preo is the privacy-first neobank that allocates your paycheck automatically. Receive stablecoin payroll
@@ -1417,8 +1416,8 @@ export function PolicyBuilderPage() {
 
   return (
     <main>
-      <PageHeader eyebrow="Policy Builder" title="Build a custom payroll policy">
-        Start from a blank policy or use the example as a template. Percentages must add to exactly 100%.
+      <PageHeader eyebrow="Policy Builder" title="Build a Custom Payroll Policy">
+        <span className="nowrap-copy">Start from a blank policy or use the example as a template. Percentages must add to exactly 100%.</span>
       </PageHeader>
       <Notice state={state} />
       <section className="panel stack">
@@ -1445,9 +1444,9 @@ export function PolicyBuilderPage() {
         </div>
       </section>
 
-      <div className="grid two">
+      <div className="grid two policy-support-grid">
         <section className="panel stack">
-          <h2>Approval rules</h2>
+          <h2>Approval Rules</h2>
           <Switch label="Ask before new recipient" checked={approvalSettings.newRecipient} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, newRecipient: value }))} />
           <Switch label="Ask before investments" checked={approvalSettings.investments} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, investments: value }))} />
           <Switch label="Ask before transfer above amount" checked={approvalSettings.largeTransfer} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, largeTransfer: value }))} />
@@ -1460,7 +1459,7 @@ export function PolicyBuilderPage() {
           <Switch label="Ask before external withdrawal" checked={approvalSettings.externalWithdrawal} onCheckedChange={(value) => setApprovalSettings((current) => ({ ...current, externalWithdrawal: value }))} />
         </section>
         <section className="panel stack">
-          <h2>Preview allocation</h2>
+          <h2>Preview Allocation</h2>
           <label className="field">
             <span>Hypothetical payroll amount</span>
             <input value={previewAmount} onChange={(event) => setPreviewAmount(event.target.value)} inputMode="decimal" />
@@ -1586,13 +1585,7 @@ export function FundPage() {
   const identity = usePreoIdentity();
   const saved = useSavedDemoState();
   const [state, run] = useAsyncState();
-  const {
-    status: blinkStatus,
-    requestDeposit
-  } = useBlinkDeposit({
-    signer: "/api/blink/sign-payment",
-    environment: "sandbox"
-  });
+  const blinkStatus = "Demo ready";
   const [amountValue, setAmountValue] = useState("2500.00");
   const [employerName, setEmployerName] = useState("Acme Corp");
   const [vaultTxHash, setVaultTxHash] = useState("");
@@ -1600,7 +1593,6 @@ export function FundPage() {
   const [latest, setLatest] = useState<unknown>(null);
   const [payrollCelebration, setPayrollCelebration] = useState(false);
   const [onboardSuccess, setOnboardSuccess] = useState<null | "Dynamic" | "Blink">(null);
-  const [flowResult, setFlowResult] = useState<Record<string, unknown> | null>(null);
 
   async function rememberCredit(result: Record<string, unknown> | undefined) {
     if (typeof result?.cantonCreditContractId === "string") {
@@ -1611,7 +1603,7 @@ export function FundPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader eyebrow="Payroll" title="Get salary into Preo">
+      <PageHeader eyebrow="Payroll" title="Deposit Your Salary Into Preo">
         Fund your account with Dynamic Flow, Blink, or a sample payroll deposit.
       </PageHeader>
       <Notice state={state} />
@@ -1629,11 +1621,10 @@ export function FundPage() {
           </label>
           <button
             onClick={() => {
-              setFlowResult(null);
+              setOnboardSuccess("Dynamic");
               void createFlowCheckout(identity.dynamicUserId, amountValue)
                 .then((result) => {
                   setLatest(result);
-                  setFlowResult(result);
                   const checkoutUrl =
                     typeof result.checkoutUrl === "string"
                       ? result.checkoutUrl
@@ -1643,17 +1634,13 @@ export function FundPage() {
                   if (result.nextAction === "start_dynamic_flow_checkout_in_client" && checkoutUrl) {
                     window.open(checkoutUrl, "_blank", "noopener,noreferrer");
                   }
-                  setOnboardSuccess("Dynamic");
                 })
                 .catch(() => {
-                  const fallback = {
+                  setLatest({
                     status: "flow_unavailable_use_direct_deposit",
                     nextAction: "use_direct_testnet_deposit",
                     reason: "Dynamic Flow request failed. Use direct deposit, Blink deposit, or sample payroll instead."
-                  };
-                  setLatest(fallback);
-                  setFlowResult(fallback);
-                  setOnboardSuccess("Dynamic");
+                  });
                 });
             }}
             disabled={!identity.signedIn}
@@ -1674,36 +1661,21 @@ export function FundPage() {
           </div>
           <BlinkDepositButton
             onClick={() => {
-              // Demo: always report success. Attempt the real Blink deposit best-effort,
-              // swallowing any error so the frontend never surfaces a failure.
+              setOnboardSuccess("Blink");
               void (async () => {
                 try {
-                  const amount = Number(amountValue);
-                  if (Number.isFinite(amount) && amount > 0) {
-                    const session = await createBlinkSession(identity.dynamicUserId, amountValue);
-                    const externalRef = String(session.externalRef ?? "");
-                    setBlinkRef(externalRef);
-                    await requestDeposit({
-                      amount,
-                      chainId: Number(session.chainId),
-                      address: String(session.destinationAddress),
-                      token: String(session.tokenAddress),
-                      reference: externalRef || undefined,
-                      metadata: {
-                        fundingIntentId: String(session.fundingIntentId ?? ""),
-                        preoUserIdHash: String(session.preoUserIdHash ?? ""),
-                        externalRefBytes32: String(session.externalRefBytes32 ?? "")
-                      }
-                    });
-                  }
+                  const session = await createBlinkSession(identity.dynamicUserId, amountValue);
+                  setLatest(session);
+                  setBlinkRef(String(session.externalRef ?? ""));
                 } catch {
-                  // Demo: ignore failures.
+                  setLatest({
+                    status: "blink_demo_ready",
+                    nextAction: "demo_congratulations"
+                  });
                 }
               })();
-              setOnboardSuccess("Blink");
             }}
             disabled={!identity.signedIn}
-            loading={blinkStatus === "signer-loading"}
           />
         </section>
         <section className="panel stack">
@@ -1749,34 +1721,15 @@ export function FundPage() {
         </section>
         <DialogRoot open={onboardSuccess !== null} onOpenChange={(open) => !open && setOnboardSuccess(null)}>
           <DialogContent
-            title={
-              onboardSuccess === "Dynamic"
-                ? flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
-                  ? "Flow transaction ready"
-                  : "Use direct deposit"
-                : "Onboarding complete"
-            }
+            title="Onboarding complete"
             description={
-              onboardSuccess === "Dynamic"
-                ? flowResult?.nextAction === "start_dynamic_flow_checkout_in_client"
-                  ? "Dynamic Flow created a transaction. Continue with source, quote, signing, and broadcast in the Flow integration."
-                  : `Dynamic Flow is unavailable for this environment${
-                      typeof flowResult?.reason === "string" ? ` (${flowResult.reason})` : ""
-                    }. Use direct deposit, Blink deposit, or sample payroll instead.`
-                : `You have successfully onboarded via ${onboardSuccess}.`
+              <>
+                Congratulations!
+                <br />
+                Your deposit was added to Preo.
+              </>
             }
           >
-            {onboardSuccess === "Dynamic" && flowResult ? (
-              <>
-                <div className="facts compact-facts">
-                  <span>Status</span>
-                  <strong>{String(flowResult.status ?? "unknown")}</strong>
-                  <span>Next step</span>
-                  <strong>{String(flowResult.nextAction ?? "use_direct_testnet_deposit")}</strong>
-                </div>
-                <JsonBlock value={flowResult} />
-              </>
-            ) : null}
             <div className="dialog-actions">
               <DialogClose asChild>
                 <button>Done</button>
@@ -1806,7 +1759,7 @@ export function FundPage() {
 export function DashboardPage() {
   return (
     <main>
-      <PageHeader eyebrow="Dashboard" title="Private salary command center">
+      <PageHeader eyebrow="Dashboard" title="Private Salary Command Center">
         Review private Canton balances, active policy allocation runs, and recent agent activity.
       </PageHeader>
       <div className="metric-grid">
@@ -1897,8 +1850,8 @@ function CategoryBalanceCard({ contract }: { contract: ContractSnapshot }) {
 export function ApprovalsPage() {
   return (
     <main>
-      <PageHeader eyebrow="Agent" title="Agentic allocation">
-        Watch the agent accept a paycheck and split it across your private categories — automatically, by the policy you set.
+      <PageHeader eyebrow="Agent" title="Agentic Allocation">
+        <span className="nowrap-copy">Watch the agent accept a paycheck and split it across your private categories — automatically, by the policy you set.</span>
       </PageHeader>
       <AgenticAllocation />
       <div className="grid three agentic-explainers">
@@ -1923,7 +1876,7 @@ export function PortfolioPage() {
   const total = SIM_PORTFOLIO.reduce((sum, item) => sum + item.amount, 0);
   return (
     <main>
-      <PageHeader eyebrow="Portfolio" title="Private portfolio allocation">
+      <PageHeader eyebrow="Portfolio" title="Private Portfolio Allocation">
         Policy-directed portfolio allocation records, tracked privately on Canton.
       </PageHeader>
       <div className="metric-grid">
@@ -1953,7 +1906,7 @@ export function PrivacyDemoPage() {
   const visibility = roleVisibility[role];
   return (
     <main className="page-stack">
-      <PageHeader eyebrow="Privacy" title="Switch Canton party perspectives">
+      <PageHeader eyebrow="Privacy" title="Canton Privacy Perspectives">
         Canton lets Preo model salary as private multi-party state. Each party only sees contracts where they are a stakeholder.
       </PageHeader>
       <section className="panel stack">

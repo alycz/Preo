@@ -470,8 +470,13 @@ nav a.active {
   display: block;
 }
 
+.hero-copy h1 .dim {
+  color: inherit;
+}
+
 .hero-copy h1 .line {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .hero-copy p,
@@ -629,10 +634,24 @@ nav a.active {
   margin-bottom: 0;
 }
 
+#privacy .rows-head h2 {
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  #privacy .rows-head h2 {
+    white-space: normal;
+  }
+}
+
 .rows-head p {
   color: var(--muted);
   max-width: 60ch;
   margin-bottom: 0;
+}
+
+.nowrap-copy {
+  white-space: nowrap;
 }
 
 /* ---- Numbered hairline rows (problem list + how it works) ---- */
@@ -796,6 +815,10 @@ nav a.active {
 
 .grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.policy-support-grid {
+  margin-top: var(--space-5);
 }
 
 .dashboard-row {
@@ -2198,6 +2221,15 @@ html {
   align-content: start;
 }
 
+.agentic.mode-config .agentic-source {
+  align-content: center;
+}
+
+.agentic.mode-run .agentic-source {
+  align-content: center;
+  position: relative;
+}
+
 .agentic-node-label {
   color: var(--muted);
   font-size: var(--text-xs);
@@ -2291,6 +2323,15 @@ html {
   margin-top: var(--space-1);
   min-height: 46px;
   align-content: start;
+}
+
+.agentic.mode-run .agentic-source-state {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  left: var(--space-4);
+  justify-items: center;
+  text-align: center;
 }
 
 .agentic-pill {
@@ -2540,10 +2581,11 @@ html {
 
 .agentic-status {
   position: absolute;
-  left: var(--space-7);
+  right: var(--space-7);
   bottom: var(--space-4);
   color: var(--muted);
   font-size: var(--text-sm);
+  text-align: right;
 }
 
 .agentic-complete {
@@ -2638,6 +2680,11 @@ html {
   .agentic-status {
     position: static;
     margin-top: var(--space-2);
+  }
+  .agentic.mode-run .agentic-source-state {
+    position: static;
+    justify-items: start;
+    text-align: left;
   }
   .activity-row {
     grid-template-columns: 1fr auto;
