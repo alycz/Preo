@@ -2,14 +2,14 @@ import { directDepositRequestSchema, makeDemoTxHash } from "@preo/shared";
 import { errorResponse, ok, parseJson } from "@/lib/http";
 import { createPayrollCreditFromFundingIntent } from "@/lib/orchestration";
 import { prisma } from "@/lib/prisma";
-import { getRequiredUser } from "@/lib/users";
+import { ensureBootstrappedUser } from "@/lib/users";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, directDepositRequestSchema);
-    const user = await getRequiredUser(input.dynamicUserId);
+    const { user } = await ensureBootstrappedUser({ dynamicUserId: input.dynamicUserId });
     const sourceRef = input.sourceRef ?? `direct-${Date.now()}`;
     const settlementTxHash = input.evmTxHash ?? makeDemoTxHash("direct");
     const intent = await prisma.fundingIntent.create({

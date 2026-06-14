@@ -1654,19 +1654,25 @@ export function FundPage() {
                 const session = await createBlinkSession(identity.dynamicUserId, amountValue);
                 const externalRef = String(session.externalRef ?? "");
                 setBlinkRef(externalRef);
-                const result = await requestDeposit({
-                  amount,
-                  chainId: Number(session.chainId),
-                  address: String(session.destinationAddress),
-                  token: String(session.tokenAddress),
-                  reference: externalRef || undefined,
-                  metadata: {
-                    fundingIntentId: String(session.fundingIntentId ?? ""),
-                    preoUserIdHash: String(session.preoUserIdHash ?? ""),
-                    externalRefBytes32: String(session.externalRefBytes32 ?? "")
-                  }
-                });
-                const details = { session, blinkResult: result };
+                let result: unknown = null;
+                let blinkDepositError: string | null = null;
+                try {
+                  result = await requestDeposit({
+                    amount,
+                    chainId: Number(session.chainId),
+                    address: String(session.destinationAddress),
+                    token: String(session.tokenAddress),
+                    reference: externalRef || undefined,
+                    metadata: {
+                      fundingIntentId: String(session.fundingIntentId ?? ""),
+                      preoUserIdHash: String(session.preoUserIdHash ?? ""),
+                      externalRefBytes32: String(session.externalRefBytes32 ?? "")
+                    }
+                  });
+                } catch (error) {
+                  blinkDepositError = error instanceof Error ? error.message : String(error);
+                }
+                const details = { session, blinkResult: result, blinkDepositError };
                 setBlinkDetails(details);
                 setLatest(details);
                 return details;
@@ -1695,8 +1701,14 @@ export function FundPage() {
           </button>
           <DialogRoot open={payrollCelebration} onOpenChange={setPayrollCelebration}>
             <DialogContent
-              title="🎉 Payroll received"
-              description={`Congratulations! Your payroll from ${employerName} was deposited to Preo.`}
+              title="Payroll received"
+              description={
+                <>
+                  Congratulations!
+                  <br />
+                  {`Your payroll from ${employerName} was deposited to Preo.`}
+                </>
+              }
             >
               <div className="facts compact-facts">
                 <span>Amount</span>
@@ -1745,9 +1757,9 @@ export function DashboardPage() {
         <Metric label="Allocation runs" value={SIM_RUNS.length} />
         <Metric label="Portfolio allocations" value={SIM_PORTFOLIO.length} />
       </div>
-      <div className="grid two">
+      <div className="grid two dashboard-row">
         <section className="panel stack">
-          <h2>Private categories</h2>
+          <h2>Private Categories</h2>
           <div className="card-list">
             {SIM_CATEGORIES.map((category) => (
               <article className="mini-card" key={category.id}>
@@ -1762,7 +1774,7 @@ export function DashboardPage() {
           </div>
         </section>
         <section className="panel stack">
-          <h2>Active policy allocation runs</h2>
+          <h2>Active Policy Allocation Runs</h2>
           <div className="table-wrap compact">
             <table>
               <thead>

@@ -34,6 +34,10 @@ function visible(view: Record<string, unknown>, template: string) {
   return ((view.visibleContracts as Record<string, unknown[]> | undefined)?.[template] ?? []) as unknown[];
 }
 
+function cantonPartyForDynamicUser(dynamicUserId: string) {
+  return `preo-${dynamicUserId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 describe("backend orchestration routes", () => {
   beforeAll(() => {
     execSync("pnpm --filter @preo/web exec prisma db push", { stdio: "pipe" });
@@ -60,6 +64,119 @@ describe("backend orchestration routes", () => {
 
     expect(response.status).toBe(422);
     expect(response.json.code).toBe("POLICY_PERCENTAGE_SUM_INVALID");
+  });
+
+  it("auto-bootstraps a first-time user when starting Flow checkout", async () => {
+    const { POST } = await import("../app/api/funding/flow/checkout/route");
+    const { prisma } = await import("../lib/prisma");
+    const dynamicUserId = `flow-user-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const savedEnv = {
+      dynamicEnvironmentId: process.env.DYNAMIC_ENVIRONMENT_ID,
+      publicDynamicEnvironmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID,
+      dynamicAuthToken: process.env.DYNAMIC_AUTH_TOKEN,
+      flowCheckoutId: process.env.DYNAMIC_FLOW_CHECKOUT_ID
+    };
+
+    delete process.env.DYNAMIC_ENVIRONMENT_ID;
+    delete process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+    delete process.env.DYNAMIC_AUTH_TOKEN;
+    delete process.env.DYNAMIC_FLOW_CHECKOUT_ID;
+
+    try {
+      const response = await post(POST as RoutePost, "/api/funding/flow/checkout", {
+        dynamicUserId,
+        amount: "25.00",
+        currency: "USD",
+        purpose: "payroll_deposit"
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.json.status).toBe("flow_unavailable_use_direct_deposit");
+      expect(response.json.nextAction).toBe("use_direct_testnet_deposit");
+      expect(typeof response.json.fundingIntentId).toBe("string");
+
+      const user = await prisma.user.findUnique({ where: { dynamicUserId } });
+      expect(user?.cantonPartyId).toBe(cantonPartyForDynamicUser(dynamicUserId));
+
+      const intent = await prisma.fundingIntent.findUnique({ where: { id: response.json.fundingIntentId as string } });
+      expect(intent?.userId).toBe(user?.id);
+      expect(intent?.status).toBe("flow_unavailable_use_direct_deposit");
+    } finally {
+      if (savedEnv.dynamicEnvironmentId === undefined) {
+        delete process.env.DYNAMIC_ENVIRONMENT_ID;
+      } else {
+        process.env.DYNAMIC_ENVIRONMENT_ID = savedEnv.dynamicEnvironmentId;
+      }
+      if (savedEnv.publicDynamicEnvironmentId === undefined) {
+        delete process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+      } else {
+        process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID = savedEnv.publicDynamicEnvironmentId;
+      }
+      if (savedEnv.dynamicAuthToken === undefined) {
+        delete process.env.DYNAMIC_AUTH_TOKEN;
+      } else {
+        process.env.DYNAMIC_AUTH_TOKEN = savedEnv.dynamicAuthToken;
+      }
+      if (savedEnv.flowCheckoutId === undefined) {
+        delete process.env.DYNAMIC_FLOW_CHECKOUT_ID;
+      } else {
+        process.env.DYNAMIC_FLOW_CHECKOUT_ID = savedEnv.flowCheckoutId;
+      }
+    }
+  });
+
+  it("auto-bootstraps a first-time user when preparing a Blink session", async () => {
+    const { POST } = await import("../app/api/funding/blink/session/route");
+    const { prisma } = await import("../lib/prisma");
+    const dynamicUserId = `blink-user-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const savedEnv = {
+      demoMode: process.env.DEMO_MODE,
+      settlementChainId: process.env.SETTLEMENT_CHAIN_ID,
+      vaultAddress: process.env.PREO_FUNDING_VAULT_ADDRESS,
+      tokenAddress: process.env.TESTNET_USDC_ADDRESS
+    };
+
+    process.env.DEMO_MODE = "false";
+    delete process.env.SETTLEMENT_CHAIN_ID;
+    delete process.env.PREO_FUNDING_VAULT_ADDRESS;
+    delete process.env.TESTNET_USDC_ADDRESS;
+
+    try {
+      const response = await post(POST as RoutePost, "/api/funding/blink/session", {
+        dynamicUserId,
+        amount: "25.00"
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.json.status).toBe("awaiting_user_action");
+      expect(response.json.nextAction).toBe("open_blink_deposit_or_use_direct_vault_deposit");
+      expect(response.json.destinationAddress).toBe("0x0000000000000000000000000000000000001000");
+      expect(response.json.tokenAddress).toBe("0x0000000000000000000000000000000000002000");
+
+      const user = await prisma.user.findUnique({ where: { dynamicUserId } });
+      expect(user?.cantonPartyId).toBe(cantonPartyForDynamicUser(dynamicUserId));
+    } finally {
+      if (savedEnv.demoMode === undefined) {
+        delete process.env.DEMO_MODE;
+      } else {
+        process.env.DEMO_MODE = savedEnv.demoMode;
+      }
+      if (savedEnv.settlementChainId === undefined) {
+        delete process.env.SETTLEMENT_CHAIN_ID;
+      } else {
+        process.env.SETTLEMENT_CHAIN_ID = savedEnv.settlementChainId;
+      }
+      if (savedEnv.vaultAddress === undefined) {
+        delete process.env.PREO_FUNDING_VAULT_ADDRESS;
+      } else {
+        process.env.PREO_FUNDING_VAULT_ADDRESS = savedEnv.vaultAddress;
+      }
+      if (savedEnv.tokenAddress === undefined) {
+        delete process.env.TESTNET_USDC_ADDRESS;
+      } else {
+        process.env.TESTNET_USDC_ADDRESS = savedEnv.tokenAddress;
+      }
+    }
   });
 
   it("runs the demo payroll flow and enforces party visibility", async () => {

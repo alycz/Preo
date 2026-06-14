@@ -798,6 +798,10 @@ nav a.active {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.dashboard-row {
+  margin-bottom: var(--space-5);
+}
+
 .panel {
   border: 1px solid var(--line);
   background: var(--surface-1);
@@ -1831,7 +1835,7 @@ tbody tr:hover {
 }
 
 .dialog-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--ink);
   margin: 0 0 var(--space-2);
@@ -2214,6 +2218,14 @@ html {
 .agentic-config {
   display: grid;
   gap: var(--space-3);
+  justify-items: center;
+  text-align: center;
+}
+
+.agentic-config > .agentic-node-label,
+.agentic-config-fields,
+.agentic-config-total {
+  width: min(100%, 320px);
 }
 
 .agentic-config-fields {
@@ -2262,7 +2274,7 @@ html {
 }
 
 .agentic-config button {
-  width: 100%;
+  width: min(100%, 320px);
 }
 
 .agentic-edit {
