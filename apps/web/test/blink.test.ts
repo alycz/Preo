@@ -4,11 +4,15 @@ import { POST } from "../app/api/blink/sign-payment/route";
 import { createBlinkSignedPayload } from "../lib/blink";
 
 const payment = {
-  amount: "25.00",
+  amount: 25,
   chainId: 84532,
   address: "0x0000000000000000000000000000000000001000",
   token: "0x0000000000000000000000000000000000002000",
-  callbackScheme: null
+  callbackScheme: null,
+  url: "https://pay-sandbox.blink.cash",
+  version: "v1",
+  reference: "test-payment",
+  metadata: { invoiceId: "INV-456" }
 };
 
 describe("Blink signing", () => {
@@ -24,6 +28,7 @@ describe("Blink signing", () => {
     expect(signed.merchantId).toBe("merchant");
     expect(signed.payload).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(signed.signature).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(signed.preview.amount).toBe(25);
     expect(signed.preview.signatureTimestamp).toBe("2026-06-13T12:00:00.000Z");
     expect(JSON.stringify(signed)).not.toContain("PRIVATE KEY");
   });
