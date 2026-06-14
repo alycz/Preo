@@ -2,7 +2,10 @@ export type DynamicFlowConfig = {
   environmentId?: string;
   checkoutId?: string;
   authToken?: string;
+  apiBaseUrl?: string;
 };
+
+const DEFAULT_DYNAMIC_API_BASE = "https://app.dynamicauth.com/api/v0";
 
 export type DynamicFlowCheckoutInput = {
   amount: string;
@@ -52,7 +55,8 @@ export function createDynamicFlowConfigFromEnv(env: NodeJS.ProcessEnv = process.
   return {
     environmentId: env.DYNAMIC_ENVIRONMENT_ID ?? env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID,
     checkoutId: env.DYNAMIC_FLOW_CHECKOUT_ID,
-    authToken: env.DYNAMIC_AUTH_TOKEN
+    authToken: env.DYNAMIC_AUTH_TOKEN,
+    apiBaseUrl: env.DYNAMIC_API_BASE_URL
   };
 }
 
@@ -65,38 +69,43 @@ export async function createFlowCheckoutTransaction(
     throw new Error(`Dynamic Flow unavailable: ${availability.reason}`);
   }
 
-  const importRuntime = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<Record<string, unknown>>;
+  // Dynamic Flow checkouts are created server-to-server over REST — there is no
+  // npm package to import. Call the checkout transactions endpoint directly and
+  // fall back to a direct deposit if the API is unreachable or misconfigured.
+  const baseUrl = (config.apiBaseUrl ?? DEFAULT_DYNAMIC_API_BASE).replace(/\/+$/, "");
+  const url = `${baseUrl}/environments/${config.environmentId}/checkouts/${availability.checkoutId}/transactions`;
   try {
-    const sdk = await importRuntime("@dynamic-labs-sdk/client");
-    const createCheckout =
-      typeof sdk.createCheckout === "function"
-        ? sdk.createCheckout
-        : typeof sdk.createFlowCheckout === "function"
-          ? sdk.createFlowCheckout
-          : undefined;
-
-    if (createCheckout) {
-      const raw = await createCheckout({
-        environmentId: config.environmentId,
-        authToken: config.authToken,
-        checkoutId: availability.checkoutId,
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.authToken}`
+      },
+      body: JSON.stringify({
         amount: input.amount,
         currency: input.currency,
         purpose: input.purpose,
         userId: input.userId
-      });
-      const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-      const transaction = record.transaction && typeof record.transaction === "object" ? (record.transaction as Record<string, unknown>) : {};
-      const transactionId = record.transactionId ?? record.id ?? transaction.id;
-      if (transactionId) {
-        return {
-          status: "flow_transaction_created",
-          checkoutId: availability.checkoutId,
-          transactionId: String(transactionId),
-          nextAction: "start_dynamic_flow_checkout_in_client",
-          raw
-        };
-      }
+      })
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(`Dynamic Flow checkout API returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`);
+    }
+
+    const raw = (await response.json()) as unknown;
+    const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const transaction = record.transaction && typeof record.transaction === "object" ? (record.transaction as Record<string, unknown>) : {};
+    const transactionId = record.transactionId ?? record.id ?? transaction.id;
+    if (transactionId) {
+      return {
+        status: "flow_transaction_created",
+        checkoutId: availability.checkoutId,
+        transactionId: String(transactionId),
+        nextAction: "start_dynamic_flow_checkout_in_client",
+        raw
+      };
     }
   } catch (error) {
     return {
@@ -113,6 +122,6 @@ export async function createFlowCheckoutTransaction(
     checkoutId: availability.checkoutId,
     transactionId: null,
     nextAction: "add Dynamic Flow checkout credentials or use direct testnet deposit",
-    reason: "Dynamic Flow SDK checkout method was not found in the installed package."
+    reason: "Dynamic Flow checkout response did not include a transaction id."
   };
 }

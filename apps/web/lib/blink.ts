@@ -29,6 +29,39 @@ export function base64url(input: Buffer | string) {
   return Buffer.from(input).toString("base64url");
 }
 
+function privateKeyFromRawHex(hex: string): crypto.KeyObject | undefined {
+  // A bare 32-byte EC scalar (optionally 0x-prefixed) is the most common way a
+  // merchant signing key gets stored. Node can't import a raw scalar directly,
+  // so derive the public point with ECDH and build a JWK. Try P-256 first
+  // (matches the demo key) then secp256k1 (EVM-style merchant keys).
+  const clean = hex.trim().replace(/^0x/i, "");
+  if (!/^[0-9a-f]{64}$/i.test(clean)) {
+    return undefined;
+  }
+  const d = Buffer.from(clean, "hex");
+  for (const curve of ["prime256v1", "secp256k1"] as const) {
+    try {
+      const ecdh = crypto.createECDH(curve);
+      ecdh.setPrivateKey(d);
+      const pub = ecdh.getPublicKey(); // uncompressed: 0x04 || x(32) || y(32)
+      const crv = curve === "prime256v1" ? "P-256" : "secp256k1";
+      return crypto.createPrivateKey({
+        key: {
+          kty: "EC",
+          crv,
+          d: d.toString("base64url"),
+          x: pub.subarray(1, 33).toString("base64url"),
+          y: pub.subarray(33, 65).toString("base64url")
+        },
+        format: "jwk"
+      });
+    } catch {
+      // try next curve
+    }
+  }
+  return undefined;
+}
+
 function loadPrivateKey(rawValue: string) {
   // Normalize the most common ways a PEM gets mangled when stored in an env var:
   // literal "\n" escape sequences, surrounding quotes, and CRLF line endings.
@@ -45,7 +78,14 @@ function loadPrivateKey(rawValue: string) {
     // Standard PEM (either real newlines or now-restored escaped newlines).
     attempts.push(() => crypto.createPrivateKey(normalized));
   } else {
-    // No PEM armor — treat it as base64/base64url-encoded DER and try the
+    // Raw hex EC scalar (e.g. "0x…" or 64 hex chars) — the most common merchant
+    // key format and the source of the ASN.1 "not enough data" error when it is
+    // mistakenly decoded as base64 DER.
+    const fromHex = privateKeyFromRawHex(normalized);
+    if (fromHex) {
+      attempts.push(() => fromHex);
+    }
+    // No PEM armor — also treat it as base64/base64url-encoded DER and try the
     // common PKCS#8 and SEC1 (EC) encodings.
     const der = Buffer.from(normalized.replace(/\s+/g, ""), "base64");
     attempts.push(() => crypto.createPrivateKey({ key: der, format: "der", type: "pkcs8" }));
